@@ -1,7 +1,20 @@
 build/
 dist/
-# Generated measurement rig: probe WAVs, generated Live Sets, rendered exports.
-# All reproducible from tools/, and none of it belongs in a module repo.
-rig/
-# Josh's hand-made base Set, read by tools/make_rig_set.py. Kept local.
+
+# Measurement rig. Binaries stay out of the repo; PROVENANCE stays in.
+rig/**/*.wav
+rig/**/*.aif
+rig/**/*.aiff
+rig/**/*.als
+rig/sets/**/Ableton Project Info/
+rig/sets/**/Icon*
+!rig/cells.json
+!rig/probes/manifest.json
+!rig/**/rig-manifest.json
+!rig/**/renders-manifest.json
+
+# Josh's hand-made base Set, read by tools/make_rig_set.py. Local only.
 Source set Project/
+.DS_Store
+__pycache__/
+*.pyc

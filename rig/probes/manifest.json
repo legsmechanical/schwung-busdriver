@@ -1,0 +1,128 @@
+{
+  "sample_rate": 44100,
+  "format": "wav 32-bit float stereo",
+  "probes": {
+    "ramp": {
+      "file": "ramp.wav",
+      "sha256": "f3e59961422ce841303f09f0c8b663eed826b3d20d507fdc668222f9ddaf8289",
+      "frames": 176400,
+      "seconds": 4.0,
+      "peak": 1.0,
+      "purpose": "DC-coupling detector (sub-Hz: NOT a curve probe)"
+    },
+    "swept": {
+      "file": "swept.wav",
+      "sha256": "6f80ae93b3ebf94ae491e7eaa1af6caff20a95117376f5e31b680a733a8a9485",
+      "frames": 441000,
+      "seconds": 10.0,
+      "peak": 0.999775,
+      "purpose": "transfer curve \u2014 amplitude-swept 300 Hz carrier"
+    },
+    "lfsine": {
+      "file": "lfsine.wav",
+      "sha256": "c3dc737aba2cb84ae30e6598dfcc285798652c1dabf29a6b5494da55e0a11947",
+      "frames": 176400,
+      "seconds": 4.0,
+      "peak": 1.0,
+      "purpose": "transfer curve + asymmetry"
+    },
+    "sweep": {
+      "file": "sweep.wav",
+      "sha256": "9a3828998d6433d93eec090a22e92efbb7e5baaac6861a329a16a1b87842c0b0",
+      "frames": 441000,
+      "seconds": 10.0,
+      "peak": 0.5,
+      "purpose": "Farina: linear IR + harmonic orders"
+    },
+    "invsweep": {
+      "file": "invsweep.wav",
+      "sha256": "c0e2cce09b31d26270de705330446efdca3a11cb150f61be98eec3a75ecb36e8",
+      "frames": 441000,
+      "seconds": 10.0,
+      "peak": 0.974764,
+      "purpose": "Farina inverse filter (not for rendering)"
+    },
+    "bursts": {
+      "file": "bursts.wav",
+      "sha256": "3e0e0e69b916757cd9798d0cb3fae5ea2834c0bbab511c844ba4676ee2f32ce8",
+      "frames": 441000,
+      "seconds": 10.0,
+      "peak": 0.999994,
+      "purpose": "compressor static gain curve"
+    },
+    "steps": {
+      "file": "steps.wav",
+      "sha256": "2cf84d4505345ebbc747e8a5a655b5a6b022ef2c862798807ce89336c711481d",
+      "frames": 396900,
+      "seconds": 9.0,
+      "peak": 0.501184,
+      "purpose": "compressor attack/release times"
+    },
+    "twotone": {
+      "file": "twotone.wav",
+      "sha256": "7091ee5b9ee5a9ad331ea2c7eaa8a1718d283cfdbfdb95ee3d7ca84c069b848d",
+      "frames": 176400,
+      "seconds": 4.0,
+      "peak": 0.598634,
+      "purpose": "Crunch band split"
+    },
+    "hits": {
+      "file": "hits.wav",
+      "sha256": "186a30552c2ca76672a7360b9095bf73c9a2b30d93912d7f1bac3e35a61406cb",
+      "frames": 176400,
+      "seconds": 4.0,
+      "peak": 0.231358,
+      "purpose": "transient stage + validation"
+    }
+  },
+  "suite": {
+    "file": "suite.wav",
+    "sha256": "6f6fb44cd168fc4bd4484b1c148b7e92b403816ac4ae9c850ab4095dc5d97b2c",
+    "frames": 2469600,
+    "seconds": 56.0,
+    "gap_seconds": 0.5,
+    "align_segment": "align",
+    "offsets": {
+      "align": {
+        "start": 0,
+        "frames": 44100,
+        "seconds": 1.0
+      },
+      "swept": {
+        "start": 66150,
+        "frames": 441000,
+        "seconds": 10.0
+      },
+      "twotone": {
+        "start": 529200,
+        "frames": 176400,
+        "seconds": 4.0
+      },
+      "sweep": {
+        "start": 727650,
+        "frames": 441000,
+        "seconds": 10.0
+      },
+      "bursts": {
+        "start": 1190700,
+        "frames": 441000,
+        "seconds": 10.0
+      },
+      "steps": {
+        "start": 1653750,
+        "frames": 396900,
+        "seconds": 9.0
+      },
+      "hits": {
+        "start": 2072700,
+        "frames": 176400,
+        "seconds": 4.0
+      },
+      "ramp": {
+        "start": 2271150,
+        "frames": 176400,
+        "seconds": 4.0
+      }
+    }
+  }
+}
