@@ -1,0 +1,163 @@
+{
+  "title": "Drum Bus",
+  "children": [
+    {
+      "title": "Overview",
+      "lines": [
+        "Drum-bus glue. Six",
+        "knobs, transparent",
+        "until you touch it.",
+        "",
+        "With every control at",
+        "its default the stage",
+        "is skipped entirely,",
+        "so it costs nothing",
+        "and passes audio",
+        "bit-for-bit."
+      ]
+    },
+    {
+      "title": "Controls",
+      "children": [
+        {
+          "title": "Compress",
+          "lines": [
+            "One knob over a",
+            "coordinated program:",
+            "threshold -4 to -38",
+            "dBFS, ratio 0.06 to a",
+            "full limit, release",
+            "115 down to 55 ms.",
+            "",
+            "Attack stays near",
+            "11 ms at every",
+            "setting so the beater",
+            "click gets through.",
+            "",
+            "It can only ever turn",
+            "things down. Makeup",
+            "is measured from the",
+            "audio, not predicted."
+          ]
+        },
+        {
+          "title": "Crunch",
+          "lines": [
+            "Full-band saturation.",
+            "Soft knee, a cubic",
+            "term for grit, and a",
+            "deliberate asymmetry",
+            "so it makes even",
+            "harmonics too, which",
+            "is what reads as",
+            "warmth rather than",
+            "fuzz.",
+            "",
+            "Level-matched and",
+            "DC-blocked, so it",
+            "adds colour without",
+            "adding level."
+          ]
+        },
+        {
+          "title": "Attack",
+          "lines": [
+            "Bipolar, centre is",
+            "off. Shapes the onset",
+            "and nothing else -",
+            "the tail does not",
+            "move.",
+            "",
+            "Up sharpens, down",
+            "softens, by about",
+            "15 dB either way on",
+            "a sharp hit.",
+            "",
+            "It is program",
+            "dependent: a slow",
+            "swell gets about half",
+            "the treatment of a",
+            "real hit."
+          ]
+        },
+        {
+          "title": "Sustain",
+          "lines": [
+            "Bipolar, centre is",
+            "off. Shapes the decay",
+            "and nothing else -",
+            "the onset does not",
+            "move.",
+            "",
+            "Up lengthens the tail,",
+            "down shortens it, by",
+            "about -8 to +12 dB.",
+            "",
+            "Attack and Sustain are",
+            "independent: set one",
+            "without disturbing",
+            "the other."
+          ]
+        },
+        {
+          "title": "Dry/Wet",
+          "lines": [
+            "A blend across the",
+            "whole stage, so",
+            "anything under 100%",
+            "is parallel",
+            "compression: the",
+            "untouched signal with",
+            "the squashed one",
+            "underneath it.",
+            "",
+            "Often the best glue",
+            "setting is a heavy",
+            "Compress blended",
+            "back at 30-50%."
+          ]
+        },
+        {
+          "title": "Output",
+          "lines": [
+            "Trim after everything,",
+            "-24 to +12 dB.",
+            "",
+            "The automatic makeup",
+            "is capped at +15 dB",
+            "and only tracks real",
+            "signal, so a heavily",
+            "compressed bus can",
+            "come back short and a",
+            "crunch-only setting",
+            "can run hot. This is",
+            "where you match it."
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Signal order",
+      "lines": [
+        "Attack, then Sustain,",
+        "then Crunch, then",
+        "Compress, then makeup,",
+        "then Output.",
+        "",
+        "Transient shaping runs",
+        "before the compressor,",
+        "so what you sharpen is",
+        "what the compressor",
+        "then has to catch."
+      ]
+    },
+    {
+      "title": "MIDI",
+      "lines": [
+        "None. Drum Bus has no",
+        "MIDI surface - it only",
+        "processes audio."
+      ]
+    }
+  ]
+}
