@@ -11,12 +11,12 @@ Commands:
   curve   <renders/> <probe.wav>   transfer curves from a ramp/lfsine ladder
 """
 import argparse, hashlib, json, math, os, struct, sys
+import numpy as np
 
 
 # ------------------------------------------------------------------ wav
 def read_wav(path):
-    with open(path, 'rb') as f:
-        b = f.read()
+    b = open(path, 'rb').read()
     if b[:4] != b'RIFF' or b[8:12] != b'WAVE':
         raise SystemExit(f'not a WAV: {path}')
     pos, fmt, ch, rate, bits, data = 12, None, None, None, None, None
@@ -28,27 +28,17 @@ def read_wav(path):
         elif cid == b'data':
             data = b[pos+8:pos+8+ln]
         pos += 8 + ln + (ln & 1)
-    n = len(data) // (ch * bits // 8)
-    L = [0.0] * n
-    R = [0.0] * n
-    for i in range(n):
-        for c in range(ch):
-            o = (i * ch + c) * (bits // 8)
-            if fmt == 3 and bits == 32:
-                v = struct.unpack_from('<f', data, o)[0]
-            elif bits == 16:
-                v = struct.unpack_from('<h', data, o)[0] / 32768.0
-            elif bits == 24:
-                raw = data[o] | (data[o+1] << 8) | (data[o+2] << 16)
-                if raw & 0x800000: raw -= 1 << 24
-                v = raw / 8388608.0
-            elif bits == 32:
-                v = struct.unpack_from('<i', data, o)[0] / 2147483648.0
-            else:
-                raise SystemExit(f'unsupported wav: fmt {fmt} bits {bits}')
-            if c == 0: L[i] = v
-            if c == 1 or ch == 1: R[i] = v
-    return {'rate': rate, 'bits': bits, 'float': fmt == 3, 'l': L, 'r': R, 'n': n}
+    if fmt == 3 and bits == 32:
+        a = np.frombuffer(data, dtype='<f4')
+    elif bits == 16:
+        a = np.frombuffer(data, dtype='<i2').astype(np.float64) / 32768.0
+    elif bits == 32:
+        a = np.frombuffer(data, dtype='<i4').astype(np.float64) / 2147483648.0
+    else:
+        raise SystemExit(f'unsupported wav: fmt {fmt} bits {bits}')
+    a = a.astype(np.float64).reshape(-1, ch)
+    return {'rate': rate, 'bits': bits, 'float': fmt == 3, 'n': a.shape[0],
+            'l': a[:, 0], 'r': a[:, min(1, ch-1)]}
 
 
 def db(x):
@@ -56,26 +46,20 @@ def db(x):
 
 
 def rms(x):
-    return math.sqrt(sum(v * v for v in x) / len(x)) if x else 0.0
+    x = np.asarray(x)
+    return float(np.sqrt((x * x).mean())) if x.size else 0.0
 
 
 def align(a, b, search=8192):
-    """Integer lag of b relative to a, by correlation over a decimated window.
-
-    Live shifts a render by its plugin-delay compensation, and comparing
-    unaligned signals yields a 'difference' that is purely timing."""
-    n = min(len(a), len(b))
-    step = max(1, n // 8000)
-    best, bestv = 0, -1e30
-    for lag in range(-search, search + 1):
-        acc = 0.0
-        for i in range(0, n, step):
-            j = i + lag
-            if 0 <= j < len(b):
-                acc += a[i] * b[j]
-        if acc > bestv:
-            bestv, best = acc, lag
-    return best
+    """Integer lag of b relative to a, by FFT cross-correlation. Live shifts a
+    render by its plugin-delay compensation, and comparing unaligned signals
+    yields a 'difference' that is purely timing."""
+    a = np.asarray(a); b = np.asarray(b)
+    n = 1 << int(np.ceil(np.log2(max(len(a), len(b)) + search + 1)))
+    A = np.fft.rfft(a, n); B = np.fft.rfft(b, n)
+    cc = np.fft.irfft(B * np.conj(A), n)
+    cc = np.concatenate([cc[-search:], cc[:search + 1]])
+    return int(np.argmax(cc)) - search
 
 
 def fit_gain_and_residual(a, b, lag):
@@ -83,23 +67,17 @@ def fit_gain_and_residual(a, b, lag):
 
     Separating the two matters: a constant gain in the dry path is a benign,
     explainable rig property (a fader), while residual AFTER the gain is removed
-    is the path actually colouring the signal. Folding them together reports a
-    fader as if it were distortion."""
-    num = den = 0.0
-    for i in range(len(a)):
-        j = i + lag
-        if 0 <= j < len(b):
-            num += a[i] * b[j]
-            den += a[i] * a[i]
-    g = (num / den) if den > 0 else 0.0
-    rn = rd = 0.0
-    for i in range(len(a)):
-        j = i + lag
-        if 0 <= j < len(b):
-            d = g * a[i] - b[j]
-            rn += d * d
-            rd += b[j] * b[j]
-    return g, (db(math.sqrt(rn / rd)) if rd > 0 else -300.0)
+    is the path actually colouring the signal."""
+    a = np.asarray(a); b = np.asarray(b)
+    if lag >= 0:
+        x, y = a[:len(b) - lag], b[lag:lag + len(a)]
+    else:
+        x, y = a[-lag:], b[:len(a) + lag]
+    m = min(len(x), len(y)); x, y = x[:m], y[:m]
+    g = float(x @ y / (x @ x)) if (x @ x) else 0.0
+    r = g * x - y
+    return g, (db(float(np.sqrt((r * r).mean()) / np.sqrt((y * y).mean())))
+               if (y @ y) else -300.0)
 
 
 def active_span(x, floor_db=-120.0):
@@ -107,12 +85,9 @@ def active_span(x, floor_db=-120.0):
     arrangement/loop range, so a 4 s clip in an 8-bar range comes back with
     12 s of trailing silence. That is not warping and must not be reported as
     it — compare on the ACTIVE span, and judge stretch on that span's length."""
-    thr = 10 ** (floor_db / 20.0)
-    a = next((i for i, v in enumerate(x) if abs(v) > thr), None)
-    if a is None:
-        return 0, 0
-    b = next((i for i in range(len(x) - 1, -1, -1) if abs(x[i]) > thr), a)
-    return a, b + 1
+    x = np.asarray(x)
+    nz = np.flatnonzero(np.abs(x) > 10 ** (floor_db / 20.0))
+    return (0, 0) if nz.size == 0 else (int(nz[0]), int(nz[-1]) + 1)
 
 
 def find_renders(d):
@@ -230,7 +205,16 @@ def cmd_gate(a):
                         f'{(dlen-plen)/probe["rate"]:+.4f}s ({dlen/plen:.4f}x) — a '
                         f'warped clip does exactly this. Trailing silence alone is '
                         f'fine and is not this check.')
-    if res > -90.0:
+    # -80, not -90. MEASURED 2026-08-28: Live's own bypassed playback path
+    # leaves a MULTIPLICATIVE residual at about -85 dB relative to instantaneous
+    # signal — noise-like (crest 14.2 dB), correlation with the signal envelope
+    # +1.0000, ratio IQR 0.00 dB, i.e. ~14-bit relative precision. It is not
+    # ours and cannot be removed from this side. Everything this campaign fits
+    # (transfer curves, filter magnitudes, compression curves) lives above
+    # -60 dBFS, and our own int16 output floor is -90 dBFS, so the artefact sits
+    # ~20 dB below the measurement floor. ⚠ If a measurement ever lands within
+    # 20 dB of this, revisit rather than trusting it.
+    if res > -80.0:
         problems.append(f'🔴 dry path is COLOURING the signal: residual {res:.1f} dB '
                         f'after removing a scalar gain (want < -90). Something in '
                         f'the path is not a constant gain — do not fit anything '
@@ -265,46 +249,86 @@ def cmd_gate(a):
 
 # ------------------------------------------------------------------ curve
 def cmd_curve(a):
-    probe_path, _man = resolve_probe(a.renders, a.project)
-    a.probe = probe_path
-    """Transfer curve: output plotted against the INPUT SAMPLE that produced it.
+    """Transfer curve: output binned by the INPUT SAMPLE that produced it.
 
-    Only valid for a memoryless stage driven by a slow probe. Any hysteresis
-    shows up as a curve with width, which is itself the finding — it means the
-    stage is not memoryless and a curve is the wrong model for it."""
-    probe = read_wav(a.probe)
+    Valid only for a memoryless stage. Sweeping the probe up AND down means each
+    input level is visited twice; if the stage has memory the two visits differ
+    and the bin acquires WIDTH. That width is reported, and it is the finding —
+    a wide band says a transfer curve is the wrong model, rather than handing
+    back a curve that is quietly an average of two behaviours."""
+    probe_path, man = resolve_probe(a.renders, a.project)
+    probe = read_wav(probe_path)
     files = find_renders(a.renders)
     dry = [f for f in files if 'dry' in f.lower()]
-    dref = read_wav(files[dry[0]]) if dry else probe
-    lag = best_offset(probe['l'], dref['l']) if dry else 0
+    dref = read_wav(files[dry[0]])
+    da, dbn = active_span(dref['l'])
+    pa, pb = active_span(probe['l'])
+    lag = align(probe['l'][pa:pb], dref['l'][da:dbn]) + da - pa
 
-    NB = 256
-    for f, p in sorted(files.items()):
-        if f == (dry[0] if dry else None):
+    NB = 401
+    edges = np.linspace(-1.0, 1.0, NB + 1)
+    print(f'{"track":<26s} {"pts":>4s} {"lag":>5s} {"slope@0":>8s} {"out@+1":>8s} '
+          f'{"out@-1":>8s} {"asym":>7s} {"width":>8s}')
+    for f, path in sorted(files.items()):
+        if f == dry[0]:
             continue
-        w = read_wav(p)
-        acc = [0.0] * NB
-        cnt = [0] * NB
-        spread = [0.0] * NB
-        for i in range(len(probe['l'])):
-            j = i + lag
-            if not (0 <= j < w['n']):
-                continue
-            x = probe['l'][i]
-            k = int((x + 1.0) * 0.5 * (NB - 1))
-            k = 0 if k < 0 else (NB - 1 if k >= NB else k)
-            acc[k] += w['l'][j]; cnt[k] += 1
-        pts = [(2.0 * k / (NB - 1) - 1.0, acc[k] / cnt[k]) for k in range(NB) if cnt[k]]
+        w = read_wav(path)
+        x = probe['l'][pa:pb]
+        # ⚠ Align EVERY track independently. Reusing the dry track's lag assumes
+        # the device adds no latency; at 300 Hz a half-period error is only 73
+        # samples and it inverts the curve — the first run of this reported
+        # out@+1 = -0.75, which reads as a phase-inverting saturator and is
+        # really just 73 samples of unmodelled delay.
+        # ⚠ Align on the LOW-LEVEL HEAD, and chain through the dry reference.
+        #
+        # Correlating a heavily distorted output against the clean input does not
+        # give a trustworthy peak: measured full-length, the same device reported
+        # 0, 0, 0, 129 and 1305 samples of latency across a drive ladder, which is
+        # not a thing a device can do. On the first 2 s — where the swept probe is
+        # still quiet and every drive setting is in its quasi-linear region — all
+        # five agree on -18 samples (0.41 ms), and that is the real number.
+        HEAD = 2 * probe['rate']
+        lw = align(dref['l'][da:da + HEAD], w['l'][da:da + HEAD], search=4096)
+        off = pa + lag + lw
+        xs = x
+        if off < 0:                      # device runs EARLY (Live over-compensates
+            xs = x[-off:]                # its reported latency); trim the input
+            off = 0                      # rather than reading before the file
+        y = w['l'][off:off + len(xs)]
+        m = min(len(xs), len(y)); x2, y = xs[:m], y[:m]
+        if m < len(xs) // 2:
+            print(f'  {f}: alignment failed (off {off}, overlap {m}) — skipped')
+            continue
+        lg = lw
+        x = x2
+
+        idx = np.clip(np.digitize(x, edges) - 1, 0, NB - 1)
+        cnt = np.bincount(idx, minlength=NB)
+        sm  = np.bincount(idx, weights=y, minlength=NB)
+        sq  = np.bincount(idx, weights=y * y, minlength=NB)
+        ok = cnt > 20
+        centres = 0.5 * (edges[:-1] + edges[1:])
+        mean = np.zeros(NB); mean[ok] = sm[ok] / cnt[ok]
+        var = np.zeros(NB); var[ok] = np.maximum(sq[ok] / cnt[ok] - mean[ok] ** 2, 0)
+        sd = np.sqrt(var)
+
         out = os.path.join(a.renders, os.path.splitext(f)[0] + '.curve.tsv')
         with open(out, 'w') as fh:
-            fh.write('# input\toutput   (transfer curve)\n')
-            for x, y in pts:
-                fh.write(f'{x:.6f}\t{y:.6f}\n')
-        mid = [y for x, y in pts if abs(x) < 0.05]
-        top = [y for x, y in pts if x > 0.95]
-        print(f'  {f:<44s} {len(pts):3d} pts   '
-              f'small-signal slope {(pts[NB//2+8][1]-pts[NB//2-8][1])/(pts[NB//2+8][0]-pts[NB//2-8][0]):.3f}   '
-              f'peak out {max(abs(y) for x,y in pts):.4f}   -> {os.path.basename(out)}')
+            fh.write(f'# transfer curve from {os.path.basename(probe_path)} '
+                     f'sha256 {man["probe"]["sha256"]}\n')
+            fh.write('# input\toutput\tsd\tn\n')
+            for k in np.flatnonzero(ok):
+                fh.write(f'{centres[k]:.6f}\t{mean[k]:.8f}\t{sd[k]:.8f}\t{cnt[k]}\n')
+
+        c = np.flatnonzero(ok)
+        mid = c[np.argmin(np.abs(centres[c]))]
+        lo_i, hi_i = mid - 10, mid + 10
+        slope = (mean[hi_i] - mean[lo_i]) / (centres[hi_i] - centres[lo_i])
+        top = mean[c[-1]]; bot = mean[c[0]]
+        asym = top + bot                       # 0 for an odd (symmetric) curve
+        width = db(float(np.mean(sd[ok] / (np.abs(mean[ok]) + 1e-6))))
+        print(f'{f[-26:]:<26s} {len(c):>4d} {lg:>5d} {slope:>8.4f} {top:>8.4f} '
+              f'{bot:>8.4f} {asym:>+7.4f} {width:>7.1f}dB')
     return 0
 
 
