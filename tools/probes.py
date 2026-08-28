@@ -201,6 +201,55 @@ PROBES = {
     'hits':       (hits,        'transient stage + validation'),
 }
 
+ALIGN_DB = -30.0
+GAP = 0.5
+
+
+def align_tone(seconds=1.0, hz=300.0, db_level=ALIGN_DB):
+    """Quiet 300 Hz tone at the head of every suite — the ALIGNMENT segment.
+
+    Alignment is the one thing that must work at every parameter cell, and
+    correlating a distorted output against a clean input does not: measured
+    full-length across one drive ladder it reported 0, 0, 0, 129 and 1305
+    samples of latency, and the bad lag silently INVERTED the extracted curve.
+    A segment quiet enough to keep every setting quasi-linear makes alignment
+    reliable by construction instead of by luck."""
+    n = int(seconds * SR)
+    a = 10 ** (db_level / 20.0)
+    s = []
+    for i in range(n):
+        env = 1.0
+        f = int(0.01 * SR)
+        if i < f: env = i / f
+        if i > n - f: env = (n - i) / f
+        s.append(a * env * math.sin(2 * math.pi * hz * i / SR))
+    return s, s
+
+
+SUITE_ORDER = ['align', 'swept', 'twotone', 'sweep', 'bursts', 'steps', 'hits', 'ramp']
+
+
+def build_suite(outdir):
+    """One WAV holding every probe end to end, with silence between them.
+
+    So that ONE Live export can cover the whole campaign: each track is a
+    parameter cell, each track carries this whole suite, and the analysis slices
+    it by the offsets recorded here. Gaps let the device's state (compressor
+    release, reverb tail) settle so one probe cannot contaminate the next."""
+    segs, offsets = [], {}
+    gap = [0.0] * int(GAP * SR)
+    for name in SUITE_ORDER:
+        fn = align_tone if name == 'align' else PROBES[name][0]
+        l, _ = fn()
+        offsets[name] = {'start': len(segs), 'frames': len(l),
+                         'seconds': round(len(l) / SR, 4)}
+        segs.extend(l)
+        segs.extend(gap)
+    path = os.path.join(outdir, 'suite.wav')
+    h = write_wav(path, segs, segs)
+    return path, h, offsets, len(segs)
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else 'rig/probes'
     os.makedirs(outdir, exist_ok=True)
@@ -215,6 +264,14 @@ def main():
             'peak': round(max(abs(v) for v in l), 6), 'purpose': why,
         }
         print(f'{name:10s} {len(l)/SR:6.2f}s  peak {max(abs(v) for v in l):.3f}  {h[:16]}…  {why}')
+    path, h, offsets, total = build_suite(outdir)
+    manifest['suite'] = {'file': 'suite.wav', 'sha256': h, 'frames': total,
+                         'seconds': round(total / SR, 3), 'gap_seconds': GAP,
+                         'align_segment': 'align', 'offsets': offsets}
+    print(f'\nsuite.wav  {total/SR:6.2f}s  {h[:16]}…  '
+          f'({len(offsets)} segments, {GAP}s gaps)')
+    for k, v in offsets.items():
+        print(f'   {k:9s} @ {v["start"]/SR:6.2f}s  {v["seconds"]:5.2f}s')
     with open(os.path.join(outdir, 'manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=2)
     print(f'\nwrote {len(PROBES)} probes + manifest.json to {outdir}/')

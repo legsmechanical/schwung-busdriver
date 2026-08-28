@@ -324,6 +324,8 @@ def preflight(als_path, manifest):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--probe', required=True, help='probe WAV to feed every cell')
+    ap.add_argument('--cells', help='JSON list of {label, device_on, params} — '
+                                    'the whole campaign in one Set')
     ap.add_argument('--param', help='parameter to sweep')
     ap.add_argument('--values', help='comma-separated values for --param')
     ap.add_argument('--fixed', action='append', default=[],
@@ -362,15 +364,25 @@ def main():
             raise SystemExit(f'unknown parameter {k}')
         fixed[k] = (v.lower() == 'true') if RANGES[k][0] == 'bool' else float(v)
 
-    cells = [('dry', None)]
-    if a.param:
-        if a.param not in RANGES:
-            raise SystemExit(f'unknown parameter {a.param}')
-        for v in a.values.split(','):
-            val = (v.lower() == 'true') if RANGES[a.param][0] == 'bool' else float(v)
-            cells.append((f'{a.param}_{v}', val))
+    explicit = None
+    if a.cells:
+        with open(a.cells) as f:
+            explicit = json.load(f)
+        for c in explicit:
+            for k in c['params']:
+                if k not in RANGES:
+                    raise SystemExit(f'{c["label"]}: unknown parameter {k}')
+        cells = [(c['label'], None) for c in explicit]
     else:
-        cells.append(('neutral', None))
+        cells = [('dry', None)]
+        if a.param:
+            if a.param not in RANGES:
+                raise SystemExit(f'unknown parameter {a.param}')
+            for v in a.values.split(','):
+                val = (v.lower() == 'true') if RANGES[a.param][0] == 'bool' else float(v)
+                cells.append((f'{a.param}_{v}', val))
+        else:
+            cells.append(('neutral', None))
 
     # project scaffolding
     proj = a.out + ' Project'
@@ -394,6 +406,7 @@ def main():
         'base_set': a.base, 'clip_template_from': LESSON_GLOB,
         'swept_param': a.param, 'fixed': {k: v for k, v in fixed.items()},
         'tempo': a.tempo, 'tracks': [],
+        'suite': None,
         'export': {'rendered_track': 'All Individual Tracks', 'sample_rate': 44100,
                    'bit_depth': 32, 'dither': 'off', 'normalize': 'off'},
     }
@@ -406,25 +419,42 @@ def main():
         force_unity_mixer(tr)
         dev = find_device(tr)
 
-        for k, v in NEUTRAL.items():
-            set_param(dev, k, v)
-        for k, v in fixed.items():
-            set_param(dev, k, v)
-
-        if label == 'dry':
-            on = dev.find('On').find('Manual')
-            on.set('Value', 'false')            # device bypassed = the reference
-        elif val is not None:
-            set_param(dev, a.param, val)
+        if explicit is not None:
+            spec = explicit[idx]
+            for k, v in spec['params'].items():
+                set_param(dev, k, v)
+            dev.find('On').find('Manual').set(
+                'Value', 'true' if spec.get('device_on', True) else 'false')
+        else:
+            for k, v in NEUTRAL.items():
+                set_param(dev, k, v)
+            for k, v in fixed.items():
+                set_param(dev, k, v)
+            if label == 'dry':
+                dev.find('On').find('Manual').set('Value', 'false')
+            elif val is not None:
+                set_param(dev, a.param, val)
 
         install_clip(tr, clip_template, rel, os.path.abspath(dst), frames, rate, beats)
         tracks_el.append(tr)
 
-        cell = dict(NEUTRAL); cell.update(fixed)
-        if label != 'dry' and val is not None:
-            cell[a.param] = val
+        if explicit is not None:
+            cell = dict(explicit[idx]['params'])
+            on = explicit[idx].get('device_on', True)
+        else:
+            cell = dict(NEUTRAL); cell.update(fixed)
+            if label != 'dry' and val is not None:
+                cell[a.param] = val
+            on = label != 'dry'
         manifest['tracks'].append({'index': idx, 'name': name,
-                                   'device_on': label != 'dry', 'params': cell})
+                                   'device_on': on, 'params': cell})
+
+    pm = os.path.join(os.path.dirname(a.probe), 'manifest.json')
+    if os.path.exists(pm):
+        with open(pm) as f:
+            pmj = json.load(f)
+        if pmj.get('suite', {}).get('file') == os.path.basename(a.probe):
+            manifest['suite'] = pmj['suite']
 
     next_id, nfixed = fix_id_counters(root)
 
