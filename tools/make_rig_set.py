@@ -138,6 +138,24 @@ def offset_ids(el, delta):
             pass  # already handled above
 
 
+def fix_id_counters(root):
+    """Live validates document-level ID counters on open and REFUSES the file if
+    one is stale: "NextPointeeId is too low: 25705 must be bigger than 625704".
+
+    Cloning tracks pushes Ids past whatever the base Set's counter said, so the
+    counter has to be recomputed afterwards. It is checked against the maximum
+    of EVERY Id attribute in the document, not just those on <Pointee>."""
+    mx = 0
+    for e in root.iter():
+        v = e.attrib.get('Id')
+        if v and v.lstrip('-').isdigit():
+            mx = max(mx, int(v))
+    n = 0
+    for e in root.iter('NextPointeeId'):
+        e.set('Value', str(mx + 1)); n += 1
+    return mx + 1, n
+
+
 def set_track_name(track, name):
     n = track.find('Name')
     n.find('EffectiveName').set('Value', name)
@@ -198,6 +216,59 @@ def install_clip(track, clip_template, rel_path, abs_path, frames, rate, beats):
             if e is not None:
                 e.set('Value', v)
     events.append(clip)
+
+
+def preflight(als_path, manifest):
+    """Re-open the written Set and check the invariants Live enforces.
+
+    Live validates on open and refuses the whole document on a single stale
+    counter — "NextPointeeId is too low: 25705 must be bigger than 625704" —
+    which is a fine error to get once and a waste of a human round-trip to get
+    twice. Everything checkable without Live is checked here.
+
+    NB Ids are NOT globally unique even in a hand-made Set (0 appears 22 times),
+    so duplicate Ids are normal and deliberately not flagged."""
+    root = ET.fromstring(gzip.open(als_path, 'rb').read().decode('utf-8'))
+    fails = []
+
+    mx = max((int(e.attrib['Id']) for e in root.iter()
+              if e.attrib.get('Id', '').lstrip('-').isdigit()), default=0)
+    for e in root.iter('NextPointeeId'):
+        if int(e.get('Value')) <= mx:
+            fails.append(f'NextPointeeId {e.get("Value")} must exceed max Id {mx}')
+
+    tracks = list(root.find('.//Tracks'))
+    if len(tracks) != len(manifest['tracks']):
+        fails.append(f'{len(tracks)} tracks in file, {len(manifest["tracks"])} in manifest')
+
+    for tr, m in zip(tracks, manifest['tracks']):
+        nm = tr.find('Name/EffectiveName').get('Value')
+        if nm != m['name']:
+            fails.append(f'track name {nm} != {m["name"]}')
+        dev = find_device(tr)
+        if dev is None:
+            fails.append(f'{nm}: no {DEVICE}'); continue
+        on = dev.find('On/Manual').get('Value') == 'true'
+        if on != m['device_on']:
+            fails.append(f'{nm}: device On={on}, expected {m["device_on"]}')
+        clips = list(tr.iter('AudioClip'))
+        if len(clips) != 1:
+            fails.append(f'{nm}: {len(clips)} clips, expected 1'); continue
+        w = clips[0].find('.//IsWarped')
+        if w is None or w.get('Value') != 'false':
+            fails.append(f'{nm}: clip is WARPED — Live would time-stretch the probe')
+        ap = clips[0].find('.//Path')
+        if ap is None or not os.path.exists(ap.get('Value')):
+            fails.append(f'{nm}: clip sample path missing')
+        for k, want in m['params'].items():
+            el = dev.find(k + '/Manual')
+            got = el.get('Value')
+            if RANGES[k][0] == 'bool':
+                if (got == 'true') != bool(want):
+                    fails.append(f'{nm}: {k}={got}, expected {want}')
+            elif abs(float(got) - float(want)) > 1e-6:
+                fails.append(f'{nm}: {k}={got}, expected {want}')
+    return fails
 
 
 def main():
@@ -300,6 +371,8 @@ def main():
         manifest['tracks'].append({'index': idx, 'name': name,
                                    'device_on': label != 'dry', 'params': cell})
 
+    next_id, nfixed = fix_id_counters(root)
+
     als = a.out + ' Project/' + os.path.basename(a.out) + '.als'
     xml = ET.tostring(root, encoding='utf-8', xml_declaration=True)
     with gzip.open(als, 'wb') as f:
@@ -307,7 +380,16 @@ def main():
     with open(os.path.join(proj, 'rig-manifest.json'), 'w') as f:
         json.dump(manifest, f, indent=2)
 
+    fails = preflight(als, manifest)
+    if fails:
+        print('PREFLIGHT FAILED:')
+        for f in fails:
+            print('   ✗', f)
+        raise SystemExit(1)
+
     print(f'wrote {als}')
+    print('  preflight OK — counters, clips (unwarped), sample paths, every param verified')
+    print(f'  NextPointeeId -> {next_id} ({nfixed} counter(s) updated)')
     print(f'  {len(cells)} tracks (track 0 = dry reference, device OFF)')
     print(f'  probe {probe_name}  {frames} frames @ {rate} Hz  sha256 {manifest["probe"]["sha256"][:16]}…')
     if a.param:
