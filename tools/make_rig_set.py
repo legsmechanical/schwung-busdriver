@@ -205,13 +205,24 @@ def install_clip(track, clip_template, rel_path, abs_path, frames, rate, beats):
     for sr in clip.iter('SampleRef'):
         fr = sr.find('FileRef')
         if fr is not None:
+            # RelativePathType 3 = relative to the PROJECT folder. That only
+            # resolves if the folder is actually a Live Project, which is what
+            # the 'Ableton Project Info' directory declares — without it Live
+            # reports the sample offline even though the absolute Path is right.
+            #
+            # OriginalCrc 0 = "not computed". Live writes a real CRC for its own
+            # refs, but its own .adv presets ship 0, so 0 is the legal unknown.
+            # A CRC inherited from the template file would describe a DIFFERENT
+            # sample, which is worse than declaring it unknown.
             for t, v in (('RelativePath', rel_path), ('Path', abs_path),
                          ('RelativePathType', '3'), ('LivePackName', ''),
-                         ('LivePackId', ''), ('OriginalFileSize', str(os.path.getsize(abs_path)))):
+                         ('LivePackId', ''), ('OriginalCrc', '0'),
+                         ('OriginalFileSize', str(os.path.getsize(abs_path)))):
                 e = fr.find(t)
                 if e is not None:
                     e.set('Value', v)
-        for t, v in (('DefaultDuration', str(frames)), ('DefaultSampleRate', str(rate))):
+        for t, v in (('DefaultDuration', str(frames)), ('DefaultSampleRate', str(rate)),
+                     ('LastModDate', str(int(os.path.getmtime(abs_path))))):
             e = sr.find(t)
             if e is not None:
                 e.set('Value', v)
@@ -237,6 +248,11 @@ def preflight(als_path, manifest):
         if int(e.get('Value')) <= mx:
             fails.append(f'NextPointeeId {e.get("Value")} must exceed max Id {mx}')
 
+    projdir = os.path.dirname(als_path)
+    if not os.path.isdir(os.path.join(projdir, 'Ableton Project Info')):
+        fails.append('no "Ableton Project Info" dir — Live will not treat this as '
+                     'a Project, and project-relative samples read as OFFLINE')
+
     tracks = list(root.find('.//Tracks'))
     if len(tracks) != len(manifest['tracks']):
         fails.append(f'{len(tracks)} tracks in file, {len(manifest["tracks"])} in manifest')
@@ -260,6 +276,12 @@ def preflight(als_path, manifest):
         ap = clips[0].find('.//Path')
         if ap is None or not os.path.exists(ap.get('Value')):
             fails.append(f'{nm}: clip sample path missing')
+        else:
+            fs = clips[0].find('.//OriginalFileSize')
+            real = os.path.getsize(ap.get('Value'))
+            if fs is not None and int(fs.get('Value')) != real:
+                fails.append(f'{nm}: OriginalFileSize {fs.get("Value")} != {real} '
+                             f'(stale metadata from the clip template)')
         for k, want in m['params'].items():
             el = dev.find(k + '/Manual')
             got = el.get('Value')
@@ -325,6 +347,10 @@ def main():
     # project scaffolding
     proj = a.out + ' Project'
     os.makedirs(os.path.join(proj, 'Samples', 'Imported'), exist_ok=True)
+    # Declares the folder a Live Project, which is what makes project-relative
+    # sample paths resolvable. Live creates the .cfg inside it lazily; the
+    # directory alone is what matters (Josh's own hand-made project has it empty).
+    os.makedirs(os.path.join(proj, 'Ableton Project Info'), exist_ok=True)
     probe_name = os.path.basename(a.probe)
     dst = os.path.join(proj, 'Samples', 'Imported', probe_name)
     shutil.copyfile(a.probe, dst)
