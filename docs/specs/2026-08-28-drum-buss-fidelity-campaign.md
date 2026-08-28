@@ -96,8 +96,18 @@ and faster than real time. No OSC, no Max patch, no real-time recording.
 3. `tools/analyse.py` reads the WAVs and fits.
 
 ### 3.3 Rig discipline — non-negotiable
-- 🔴 **Set sample rate = 44.1 kHz.** The Move runs 44.1k. Rendering at 48k makes every filter
-  corner and time constant we fit wrong by 8.8%, silently and uniformly.
+- 🔴🔴 **Live's ENGINE must run at 44.1 kHz — Preferences → Audio → Sample Rate.** Not the
+  export dialog. ⚠ Corrected 2026-08-28 (Josh): Live renders at the **audio device's** rate and
+  then sample-rate-converts on export, so an export set to 44100 from a 48 kHz engine means the
+  probe is upsampled 44.1→48, **Drum Buss runs at 48 kHz**, and the result is downsampled back.
+  We would be characterising the device at the wrong rate, and any rate-dependent behaviour
+  (oversampling, fixed-coefficient filters, per-sample time constants) would be fit wrong and
+  then used at 44.1 kHz on the Move.
+  This is also the likely cause of the otherwise unexplained dry-path residual measured at
+  −83 dB: noise-like, HF-weighted, exactly proportional to signal (envelope correlation +1.0000,
+  ratio IQR 0.00 dB) and provably not a delay — which is what a 44.1→48→44.1 resampler
+  round trip looks like. **Test:** a native-44.1 export should drop that residual toward
+  bit-exact. If it does not, the artefact is something else and the −80 dB gate stands.
 - 🔴 **Export 32-bit float WAV.** We are measuring transfer curves and low-level behaviour; 16-bit
   quantisation sits exactly where the interesting parts are.
 - 🔴 **Warn about, and discard, Live's export tail/latency.** Align every render against the dry
