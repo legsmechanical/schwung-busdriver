@@ -1,2 +1,7 @@
 build/
 dist/
+# Generated measurement rig: probe WAVs, generated Live Sets, rendered exports.
+# All reproducible from tools/, and none of it belongs in a module repo.
+rig/
+# Josh's hand-made base Set, read by tools/make_rig_set.py. Kept local.
+Source set Project/
