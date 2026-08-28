@@ -33,23 +33,50 @@ def write_wav(path, samples_l, samples_r, sr=SR):
 
 # ---------------------------------------------------------------- probes
 def ramp(seconds=4.0, peak=1.0):
-    """Slow bipolar full-scale ramp: -peak -> +peak -> -peak.
+    """Slow bipolar triangle: -peak -> +peak -> -peak, no plateaus.
 
-    THE probe for a memoryless waveshaper. Plot output against input
-    sample-by-sample and you have the actual transfer curve at float
-    precision, from one render. Fitting a curve through a handful of harmonic
-    ratios is strictly worse and needs a model assumed up front.
+    ⚠ ONLY VALID FOR A DC-COUPLED PATH. Its fundamental is 1/seconds — 0.25 Hz
+    at the default — so anything with a high-pass annihilates it. MEASURED
+    2026-08-28: Drum Buss at neutral returns essentially zero for this probe
+    (correlation with the input +0.038; output non-zero only at the
+    discontinuities), i.e. the device is AC-coupled. Use `swept` for transfer
+    curves, and keep this one as the DC-coupling detector it turned out to be.
 
-    Slow enough that any incidental filtering in the path cannot smear it:
-    a 4 s traverse puts the fundamental at 0.25 Hz."""
+    ⚠ The first version multiplied the triangle by 2 and clamped, so it sat
+    pinned at +-1 for half its duration with a discontinuity in the middle and
+    never traversed the range continuously. A curve binned from that probe would
+    have been mostly plateau."""
     n = int(seconds * SR)
     out = []
     for i in range(n):
-        x = 2.0 * i / (n - 1)          # 0..2
-        v = (x - 1.0) if x <= 1.0 else (1.0 - (x - 1.0))
-        out.append(peak * (2.0 * v))
-    out = [max(-1.0, min(1.0, v)) for v in out]
+        x = 2.0 * i / (n - 1)                    # 0..2
+        v = x if x <= 1.0 else (2.0 - x)         # 0..1..0
+        out.append(peak * (2.0 * v - 1.0))       # -1..+1..-1
     return out, out
+
+
+def swept(seconds=10.0, carrier=300.0, peak=1.0):
+    """Amplitude-swept sine — THE transfer-curve probe for a real device.
+
+    A carrier well above any DC blocker or high-pass, amplitude ramped
+    0 -> peak -> 0. Every cycle traverses the curve up to the current amplitude,
+    so every input level is visited densely, while the carrier sits where no
+    high-pass touches it (a 10 Hz one-pole is -0.0 dB at 300 Hz, -32 dB at
+    0.25 Hz).
+
+    Sweeping up AND back down also exposes hysteresis: bin the output by input
+    level and a memoryless stage gives a LINE, a stage with memory gives a BAND.
+    The width is itself the finding — it says a transfer curve is the wrong
+    model for that stage, rather than handing back a curve that is quietly an
+    average over two different behaviours."""
+    n = int(seconds * SR)
+    out = []
+    for i in range(n):
+        t = i / n
+        env = (2.0 * t) if t <= 0.5 else (2.0 * (1.0 - t))
+        out.append(peak * env * math.sin(2 * math.pi * carrier * i / SR))
+    return out, out
+
 
 def lf_sine(seconds=4.0, hz=2.0, peak=1.0):
     """2 Hz full-scale sine — the same transfer-curve job as the ramp, but it
@@ -163,7 +190,8 @@ def hits(seconds=4.0, bpm=120.0, peak=0.25):
     return out, out
 
 PROBES = {
-    'ramp':       (ramp,        'transfer curve, memoryless shapers'),
+    'ramp':       (ramp,        'DC-coupling detector (sub-Hz: NOT a curve probe)'),
+    'swept':      (swept,       'transfer curve — amplitude-swept 300 Hz carrier'),
     'lfsine':     (lf_sine,     'transfer curve + asymmetry'),
     'sweep':      (sweep,       'Farina: linear IR + harmonic orders'),
     'invsweep':   (inverse_sweep,'Farina inverse filter (not for rendering)'),

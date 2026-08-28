@@ -156,6 +156,30 @@ def fix_id_counters(root):
     return mx + 1, n
 
 
+def force_unity_mixer(track):
+    """Track fader to unity, pan centred, no sends.
+
+    "All Individual Tracks" renders POST-FADER, so an inherited fader lands on
+    every measurement as a constant offset. MEASURED 2026-08-28: the base Set's
+    fader sat at 0.6309573 = exactly -4.00 dB, and every render came back 4.00 dB
+    down. It cancels between tracks, which is why the dry reference exists — but
+    a rig should not rely on an error cancelling when it can just not be there."""
+    mx = track.find('.//Mixer')
+    if mx is None:
+        return
+    v = mx.find('Volume/Manual')
+    if v is not None:
+        v.set('Value', '1')
+    pan = mx.find('Pan/Manual')
+    if pan is not None:
+        pan.set('Value', '0')
+    for s_ in mx.findall('Sends'):
+        for send in s_.findall('TrackSendHolder'):
+            sv = send.find('Send/Manual')
+            if sv is not None:
+                sv.set('Value', '0.0001')
+
+
 def set_track_name(track, name):
     n = track.find('Name')
     n.find('EffectiveName').set('Value', name)
@@ -261,6 +285,10 @@ def preflight(als_path, manifest):
         nm = tr.find('Name/EffectiveName').get('Value')
         if nm != m['name']:
             fails.append(f'track name {nm} != {m["name"]}')
+        vol = tr.find('.//Mixer/Volume/Manual')
+        if vol is None or abs(float(vol.get('Value')) - 1.0) > 1e-6:
+            fails.append(f'{nm}: fader is {vol.get("Value") if vol is not None else "?"}, '
+                         f'not unity — renders are post-fader')
         dev = find_device(tr)
         if dev is None:
             fails.append(f'{nm}: no {DEVICE}'); continue
@@ -375,6 +403,7 @@ def main():
         offset_ids(tr, 100000 * (idx + 1))
         name = f'{idx:02d}_{label}'
         set_track_name(tr, name)
+        force_unity_mixer(tr)
         dev = find_device(tr)
 
         for k, v in NEUTRAL.items():
