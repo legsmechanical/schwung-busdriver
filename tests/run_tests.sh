@@ -7,7 +7,7 @@ mkdir -p build
 CXX="${CXX:-c++}"
 echo "==> building harness with $CXX"
 $CXX -O2 -std=c++17 -Wall -Wextra -Wno-unused-parameter \
-    tests/harness.cpp src/drumbus_module.cpp \
+    tests/harness.cpp src/busdriver_module.cpp \
     -Isrc -Ishared -Idsp -Ivendor \
     -o build/harness -lm
 echo "==> running"

@@ -1,4 +1,4 @@
-# Drum Bus
+# Bus Driver
 
 A drum-bus glue effect for [Schwung](https://github.com/charlesvestal/schwung)
 on Ableton Move. Six knobs, one page, transparent until you touch it.
@@ -19,12 +19,12 @@ on Ableton Move. Six knobs, one page, transparent until you touch it.
 | **Dry/Wet** | 0..1 | A blend over the whole stage, so anything less than 1 is parallel compression. |
 | **Output** | −24..+12 dB | Trim after the auto-makeup, for when the makeup's +15 dB cap leaves you short or a crunch-only setting runs hot. |
 
-All four shaping controls are neutral at their defaults, and a neutral Drum Bus
+All four shaping controls are neutral at their defaults, and a neutral Bus Driver
 is **bit-identical to its input** — actually skipped, not run-and-do-nothing.
 
 ## Why it sounds like it does
 
-Every number in `dsp/drumbus.h` was measured, and the comments record what was
+Every number in `dsp/busdriver.h` was measured, and the comments record what was
 tried and rejected. The short version:
 
 - **Compress only ever attenuates.** Airwindows Pop3's gain is
@@ -61,7 +61,7 @@ scripts/build.sh      # Docker cross-compile + package dist/
 scripts/install.sh    # scp to move.local (MOVE_HOST=172.16.254.1 for USB tether)
 ```
 
-Then insert **Drum Bus** as an Audio FX in a Signal Chain (or Master FX).
+Then insert **Bus Driver** as an Audio FX in a Signal Chain (or Master FX).
 
 ## Development
 

@@ -1,5 +1,5 @@
 {
-  "title": "Drum Bus",
+  "title": "Bus Driver",
   "children": [
     {
       "title": "Overview",
@@ -154,7 +154,7 @@
     {
       "title": "MIDI",
       "lines": [
-        "None. Drum Bus has no",
+        "None. Bus Driver has no",
         "MIDI surface - it only",
         "processes audio."
       ]

@@ -1,6 +1,6 @@
 # Vendored DSP — provenance
 
-Drum Bus ships **MIT**. Everything here is MIT-compatible; the per-file origin
+Bus Driver ships **MIT**. Everything here is MIT-compatible; the per-file origin
 is recorded so the licence position stays checkable rather than assumed.
 
 | File | Contents | Origin | Licence |

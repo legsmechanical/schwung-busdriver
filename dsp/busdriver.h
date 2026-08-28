@@ -1,5 +1,5 @@
 // ============================================================================
-//  drumbus.h — the Drum Bus glue stage.
+//  busdriver.h — the Bus Driver glue stage.
 //
 //  Lifted whole from schwung-dr32's dsp/dr32_fxbus.cpp, where it was the
 //  always-on master stage over the summed kit mix. It has no dependency on the
@@ -16,9 +16,9 @@
 #include <cstring>
 #include "../vendor/airwindows/airwin_dyn.h"
 
-namespace drumbus {
+namespace busdriver {
 
-/** Drum Bus — a drum-bus glue insert in the spirit of Ableton's Drum Buss.
+/** Bus Driver — a drum-bus glue insert in the spirit of Ableton's Drum Buss.
  *
  *  Signal order is Attack -> Sustain -> Crunch -> Compress -> makeup, then the
  *  caller applies Mix (a dry/wet blend, i.e. parallel compression) and Output.
@@ -371,4 +371,4 @@ struct DrumBuss {
     }
 };
 
-}  // namespace drumbus
+}  // namespace busdriver

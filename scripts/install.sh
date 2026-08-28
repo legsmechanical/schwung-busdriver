@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install.sh — deploy dist/drumbus/ to the Move.
+# install.sh — deploy dist/busdriver/ to the Move.
 # Usage: scripts/install.sh              (WiFi, move.local)
 #        MOVE_HOST=172.16.254.1 scripts/install.sh   (USB tether)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-MODULE_ID=drumbus
+MODULE_ID=busdriver
 HOST="${MOVE_HOST:-move.local}"
 DEST="/data/UserData/schwung/modules/audio_fx/${MODULE_ID}"
 
@@ -21,7 +21,7 @@ for f in module.json help.json canvas.js; do
 done
 ssh "ableton@${HOST}" "chmod -R a+rw '${DEST}'"
 
-# Factory Module Presets → /data/UserData/schwung/presets/drumbus/
+# Factory Module Presets → /data/UserData/schwung/presets/busdriver/
 if [ -d "$HERE/src/presets/${MODULE_ID}" ]; then
     PDEST="/data/UserData/schwung/presets/${MODULE_ID}"
     echo "==> installing factory presets to ${PDEST}"

@@ -1,4 +1,4 @@
-/* harness.cpp — offline checks for the Drum Bus, driven through the real
+/* harness.cpp — offline checks for the Bus Driver, driven through the real
  * audio_fx_api_v2 surface (not the DSP struct directly), so the host contract
  * is exercised too.
  *

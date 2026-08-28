@@ -1,14 +1,14 @@
 {
   "_comment": "Entry to add to schwung/module-catalog.json 'modules' array (PR against charlesvestal/schwung). min_host_version = oldest host verified with the audio_fx v2 chain contract this module uses.",
   "entry": {
-    "id": "drumbus",
-    "name": "Drum Bus",
+    "id": "busdriver",
+    "name": "Bus Driver",
     "description": "Drum-bus glue: one-knob compression that only ever attenuates, a spectrum-neutral saturator, and orthogonal attack/sustain transient shaping. Measured, not guessed.",
     "author": "legsmechanical",
     "component_type": "audio_fx",
-    "github_repo": "legsmechanical/schwung-drumbus",
+    "github_repo": "legsmechanical/schwung-busdriver",
     "default_branch": "main",
-    "asset_name": "drumbus-module.tar.gz",
+    "asset_name": "busdriver-module.tar.gz",
     "min_host_version": "0.9.0"
   }
 }

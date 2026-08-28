@@ -1,12 +1,12 @@
 {
-  "id": "drumbus",
-  "name": "Drum Bus",
-  "abbrev": "DBUS",
+  "id": "busdriver",
+  "name": "Bus Driver",
+  "abbrev": "DRVR",
   "version": "0.1.0",
   "author": "legsmechanical",
   "license": "MIT",
   "description": "Drum-bus glue: one-knob compression that only ever attenuates, a spectrum-neutral saturator, and orthogonal attack/sustain shaping.",
-  "dsp": "drumbus.so",
+  "dsp": "busdriver.so",
   "api_version": 2,
   "capabilities": {
     "chainable": true,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# build.sh — cross-compile drumbus.so for the Move (aarch64) and package
-# dist/drumbus/ + dist/drumbus-module.tar.gz.
+# build.sh — cross-compile busdriver.so for the Move (aarch64) and package
+# dist/busdriver/ + dist/busdriver-module.tar.gz.
 #
 # Auto-Dockerizes (PushNPull pattern): if CROSS_PREFIX is unset and we're not
 # already in a container, build the toolchain image and re-run inside it.
@@ -9,7 +9,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$HERE"
 
-MODULE_ID=drumbus
+MODULE_ID=busdriver
 
 if [ -z "${CROSS_PREFIX:-}" ] && [ ! -f /.dockerenv ]; then
     echo "==> building in Docker (move-anything-builder)"
@@ -27,7 +27,7 @@ echo "==> compiling with $CXX"
 mkdir -p build
 $CXX -Ofast -shared -fPIC -march=armv8-a -mtune=cortex-a72 \
     -fomit-frame-pointer -fno-stack-protector -DNDEBUG -std=c++17 \
-    src/drumbus_module.cpp \
+    src/busdriver_module.cpp \
     -Isrc -Ishared -Idsp -Ivendor \
     -o "build/${MODULE_ID}.so" -lm
 

@@ -1,6 +1,6 @@
 #pragma once
 // ============================================================================
-//  airwin_dyn.h - Airwindows dynamics, transplanted for the Drum Bus.
+//  airwin_dyn.h - Airwindows dynamics, transplanted for the Bus Driver.
 //
 //    Pop3   -> the Compress stage. A real threshold-and-ratio compressor with
 //              independent attack and release. Its gain is
@@ -16,7 +16,7 @@
 //  sharpens well but is nearly inert at softening, because it boosts by
 //  DIVIDING its slow follower's rate and softens by MULTIPLYING it. The whole
 //  lower half of the knob bought under 2 dB. Attack is now an in-house
-//  detector in dsp/drumbus.h, symmetric by construction.
+//  detector in dsp/busdriver.h, symmetric by construction.
 //
 //  Original algorithms (c) Chris Johnson / Airwindows, MIT licence.
 //  Transplanted VERBATIM by schwung-dr32's tools/port_airwindows.py; nulls

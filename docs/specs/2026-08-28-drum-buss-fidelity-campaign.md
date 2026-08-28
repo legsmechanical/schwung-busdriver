@@ -1,7 +1,7 @@
 # Drum Buss fidelity campaign — spec
 
 **Status:** approved 2026-08-28, not started.
-**Goal:** rebuild `drumbus` as a faithful model of Ableton Live 12's **Drum Buss**, fit against
+**Goal:** rebuild `busdriver` as a faithful model of Ableton Live 12's **Drum Buss**, fit against
 rendered measurements rather than designed by ear.
 
 **Scope decisions (Josh, 2026-08-28):**
@@ -154,7 +154,7 @@ and the spec is amended.
 so the corner is visible — a full-scale LF sine alone cannot show a mid-high-only effect. Sweep
 **and** two-tone.
 
-⚠ **Headroom is part of the measurement.** ([[schwung-drumbus-module]]) The existing harness read
+⚠ **Headroom is part of the measurement.** ([[schwung-busdriver-module]]) The existing harness read
 attack as +6.7/−13.7 dB — the signature of a broken asymmetric control — purely because the test
 signal clipped. Every probe states its peak level, and every boosting stage is probed with room
 to boost into.
@@ -250,6 +250,8 @@ filter, and three drive types. Naïve oversampled clipping is the obvious blow-u
       ladder is generated and Josh only ever hits Export.
 - [ ] Confirm the `DriveType` enum order (0/1/2 → soft/medium/hard) — assumed from the manual's
       "increasing degree of distortion", measured in phase 3.
-- [ ] Decide whether the module keeps the id `drumbus` and the name "Drum Bus" once it is a clone
-      rather than an homage. Naming near a shipping Ableton device, in a public catalog, is worth
-      a deliberate answer rather than a default.
+- [x] ~~Decide the name once it is a clone rather than an homage.~~ **RESOLVED 2026-08-28 (Josh):
+      "Bus Driver"** — id `busdriver`, repo `schwung-busdriver`, abbrev `DRVR`. Deliberately not
+      "Drum Bus": a public-catalog module that is a faithful clone should not also carry a name a
+      keystroke away from the Ableton device it models. "Drum Buss" appears in this repo only as
+      the name of the thing being modelled, never as our own.
