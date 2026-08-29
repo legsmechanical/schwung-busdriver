@@ -802,3 +802,29 @@ ones (Punchy Driven 14.54, Squeeze & Drive 12.24).
 **Honest reading:** each stage is individually close, and stacking five of them accumulates error.
 Closing this means iterating fits *against this score* rather than against per-stage measurements
 — which is exactly what the score exists for, and it is now a one-command loop.
+
+---
+
+# 45. ⚠⚠ Fitting a SUMMARY improved the summary and made the model WORSE
+
+Closing the spectral gap started with the Transients law, which was hand-designed and never
+fitted. Fitting it end to end against the measured onset/tail table (§25, §41):
+
+| | rms error on the onset/tail table | **preset score (median 1/3-oct)** |
+|---|---|---|
+| hand-picked | 2.162 dB | **5.55 dB** |
+| fitted to the table | **0.368 dB** | **6.40 dB** ⚠ |
+
+**The fit was 6× better on its own objective and worse on the device.** Two summary statistics per
+setting can be matched by a mechanism that is wrong everywhere between them.
+
+⭑ The fit did find one real structural gap, which is why its rms fell so far. The original law
+drove the boost purely from transient-ness, which is **zero during a decay**, so it could never
+add sustain — fitted, it produced +7.68 dB of onset against +0.01 dB of tail where the measurement
+wants +3.38. The manual's *"adds attack AND sustain"* is structural. A separate sustain term was
+added, and that part is kept.
+
+**Method consequence:** fit against **rendered audio**, spectrally, not against summary numbers.
+And fit against **training data** — campaigns 1–3 — never against the 22-preset score, which is
+the only independent measure the campaign has. Fitting to it would convert validation into
+training and the number would stop meaning anything.

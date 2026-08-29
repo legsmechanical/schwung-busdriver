@@ -189,21 +189,40 @@ struct Shaper {
 struct Transients {
     float aF = 0.0f, rF = 0.0f, aS = 0.0f, rS = 0.0f;
     float envF[2] = {0, 0}, envS[2] = {0, 0};
-    float up = 0.0f, dn = 0.0f;
+    float up = 0.0f, dn = 0.0f, us = 0.0f;
+    // Fitting handles. Defaults are the shipped values; tools/fit_transients.py
+    // drives them through the module's hidden _tr_* params so the law is fitted
+    // END TO END against the measured onset/tail table, not on the isolated
+    // stage — the measurement is of the whole device, and the saturation
+    // downstream changes what any transient boost turns into.
+    // FITTED end to end against the measured onset/tail table (§25, §41):
+    // rms 0.368 dB, down from 2.162 for the hand-picked values.
+    float upScale = 4.320f, upExp = 2.940f, dnScale = 1.137f, dnExp = 0.942f;
+    // ⭑ The positive side needs a SUSTAIN term as well as an onset term. The
+    // first version drove the boost purely from transient-ness, which is zero
+    // during a decay, so it could never add sustain — fitted, it reproduced
+    // +7.69 dB of onset and +0.01 dB of tail against a measured +3.38. The
+    // manual's "adds attack AND sustain" (§25, §41) is structural, not a
+    // description of a side effect.
+    float upSus = 1.244f;
+    float msFast = 0.058f, msRel = 50.0f, msSlow = 142.1f;   // fitted
 
+    float sr_ = 44100.0f;
     void setSampleRate(float sr) {
-        aF = 1.0f - std::exp(-1.0f / (0.0005f * sr));   // 0.5 ms
-        rF = 1.0f - std::exp(-1.0f / (0.050f * sr));    // 50 ms
+        sr_ = sr;
+        aF = 1.0f - std::exp(-1.0f / (msFast * 1e-3f * sr));
+        rF = 1.0f - std::exp(-1.0f / (msRel  * 1e-3f * sr));
         aS = 1.0f - std::exp(-1.0f / (0.001f * sr));    // 1 ms, shared attack
-        rS = 1.0f - std::exp(-1.0f / (0.400f * sr));    // 400 ms
+        rS = 1.0f - std::exp(-1.0f / (msSlow * 1e-3f * sr));
     }
     void reset() { envF[0] = envF[1] = envS[0] = envS[1] = 0.0f; }
     void set(float t) {
         // The two sides are separate laws because the measurement says they are.
         // Exponents chosen so +0.75 -> +2.93 dB and +1.0 -> +8.02 dB of onset,
         // and -0.75 -> -1.99 dB of tail with the onset flat.
-        up = (t > 0.0f) ? std::pow(t, 3.2f) * 2.75f : 0.0f;
-        dn = (t < 0.0f) ? (-t) * 0.62f : 0.0f;
+        up = (t > 0.0f) ? std::pow(t, upExp) * upScale : 0.0f;
+        us = (t > 0.0f) ? t * upSus : 0.0f;          // the sustain half
+        dn = (t < 0.0f) ? std::pow(-t, dnExp) * dnScale : 0.0f;
     }
     inline void run(float &l, float &r) {
         float *ch[2] = {&l, &r};
@@ -217,11 +236,12 @@ struct Transients {
                 if (t < 0.0f) t = 0.0f;
                 g *= std::exp2(up * t);
             }
-            if (dn > 0.0f) {                       // gate: tail only
+            if (dn > 0.0f || us > 0.0f) {          // the tail term, both signs
                 float t = (envS[c] - envF[c]) / (envF[c] + 1e-5f);
                 if (t < 0.0f) t = 0.0f;
                 if (t > 3.0f) t = 3.0f;
-                g *= std::exp2(-dn * t);
+                if (dn > 0.0f) g *= std::exp2(-dn * t);
+                if (us > 0.0f) g *= std::exp2( us * t);
             }
             *ch[c] *= g;
         }

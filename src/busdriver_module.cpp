@@ -74,6 +74,17 @@ static void bd_set(bd_t *I, const char *key, float v) {
     else if (!strcmp(key, "drive_type")) p.driveType = (int)lrintf(clampf(v, 0, 2));
     else if (!strcmp(key, "trim"))       p.trim    = powf(10.0f, clampf(v, -70, 0) / 20.0f);
     else if (!strcmp(key, "output"))     p.outGain = powf(10.0f, clampf(v, -40, 3) / 20.0f);
+    /* Hidden fitting handles (leading underscore, not in chain_params): these
+     * let tools/fit_transients.py drive the law end to end. Baked values live in
+     * dsp/drumbuss.h; these exist so a fit does not need a recompile per trial. */
+    else if (!strcmp(key, "_tr_up"))    { I->d.trans.upScale = v; }
+    else if (!strcmp(key, "_tr_upexp")) { I->d.trans.upExp   = v; }
+    else if (!strcmp(key, "_tr_dn"))    { I->d.trans.dnScale = v; }
+    else if (!strcmp(key, "_tr_us"))    { I->d.trans.upSus   = v; }
+    else if (!strcmp(key, "_tr_dnexp")) { I->d.trans.dnExp   = v; }
+    else if (!strcmp(key, "_tr_fast"))  { I->d.trans.msFast  = v; I->d.trans.setSampleRate(I->d.sr); }
+    else if (!strcmp(key, "_tr_rel"))   { I->d.trans.msRel   = v; I->d.trans.setSampleRate(I->d.sr); }
+    else if (!strcmp(key, "_tr_slow"))  { I->d.trans.msSlow  = v; I->d.trans.setSampleRate(I->d.sr); }
     else {
         float *s = slot(I, key);
         if (!s) return;
@@ -165,6 +176,20 @@ static int bd_get_param(void *inst, const char *key, char *buf, int n) {
     bd_t *I = (bd_t *)inst;
     if (!I || !key || !buf || n <= 0) return -1;
     if (!strcmp(key, "state")) return bd_write_state(I, buf, n);
+    if (key[0] == '_') {          /* fitting handles read back so a typo is loud */
+        float v = 0.0f;
+        if (!strcmp(key,"_tr_up")) v = I->d.trans.upScale;
+        else if (!strcmp(key,"_tr_upexp")) v = I->d.trans.upExp;
+        else if (!strcmp(key,"_tr_dn")) v = I->d.trans.dnScale;
+        else if (!strcmp(key,"_tr_us")) v = I->d.trans.upSus;
+        else if (!strcmp(key,"_tr_dnexp")) v = I->d.trans.dnExp;
+        else if (!strcmp(key,"_tr_fast")) v = I->d.trans.msFast;
+        else if (!strcmp(key,"_tr_rel")) v = I->d.trans.msRel;
+        else if (!strcmp(key,"_tr_slow")) v = I->d.trans.msSlow;
+        else return -1;
+        int w = snprintf(buf, (size_t)n, "%.6f", (double)v);
+        return (w > 0 && w < n) ? w : -1;
+    }
     bool ok; float v = bd_get(I, key, &ok);
     if (!ok) return -1;
     int w = snprintf(buf, (size_t)n, "%.6f", (double)v);
