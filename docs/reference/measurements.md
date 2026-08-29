@@ -907,3 +907,50 @@ harmonics are 4 dB out, which means the curve is right and the stage still is no
    four-carrier harmonic data.
 2. **`med` needs a memory term** — its curve is right and its harmonics are not.
 3. `neutral` and `hard` are done to under 0.6 dB and should not be touched.
+
+## 48. `soft` rebuilt as a real folder — 12 dB → 7 dB
+
+A sine folder `y = sin(z·x)` has an exact analytic harmonic structure: driven by a sine of
+amplitude A it gives `H_n = 2·J_n(zA)`, so **`H3/H1 = J₃(zA)/J₁(zA)`**, and inverting that against
+the measured ratio recovers **z directly** rather than by fitting.
+
+Doing so at every amplitude gives **z proportional to amplitude, r = 0.91** — the signature of
+exactly this topology with a pre-gain. Recovered depth per drive setting:
+
+| Drive | 0 | 0.25 | 0.5 | 0.625 | 0.75 | 0.875 | 1.0 |
+|---|---|---|---|---|---|---|---|
+| z/amp | 1.716 | 1.487 | 1.519 | 2.342 | 2.834 | 3.081 | 3.195 |
+
+`z = 2.5071·d² − 0.6669·d + 1.6061` (rms 0.234).
+
+**Result: `soft`'s harmonic error falls from ~12 dB to 7.0–7.5 dB.**
+
+⚠ **Only r = 0.91, and the residual is structured** — the recovered z *dips* around amp 0.6–0.7,
+and a pure sine folder cannot produce a non-monotonic H3/H1. So this is close to the real topology
+but not identical to it. Recorded as such rather than presented as the answer.
+
+## 49. ⚠ The validation set does not exercise what was just fixed
+
+The preset score did **not** move (median 6.02 dB, unchanged). Not because the folder failed —
+because of what the 22 stock presets contain:
+
+| DriveType | count |
+|---|---|
+| soft (0) | 10 |
+| med (1) | 4 |
+| hard (2) | 8 |
+
+but **only 2 of 22 use `soft` with Drive above 0.3** (Muffled Crunch 0.56, Transient Shaping
+Enhance 0.50). The rest of the soft presets sit at Drive 0, where the folder is barely engaged.
+
+⭑ **So the median over the stock presets is not a complete quality measure.** It is honest and
+independent, which is why it stays the headline, but it under-weights the stage with the largest
+known error. A change can be a real improvement and invisible to it — which is exactly what
+happened here, and is worth knowing before anyone reads a flat median as "no progress".
+
+**▶ Remaining, in order of expected value:**
+1. **`med` needs a memory term** — its curve fits to 0.006–0.070 rms yet its harmonics are 4 dB
+   out (§47), and it appears in 4 presets.
+2. **`soft`'s residual dip** — the topology is close but not exact.
+3. A validation pass that covers the parameter space evenly, alongside the stock presets, so
+   improvements to under-represented stages are visible.

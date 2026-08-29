@@ -175,6 +175,40 @@ struct Shaper {
     }
 };
 
+// ---------------------------------------------------------------- the folder
+//
+// §48: `soft` is a FOLDER, and a static table cannot represent it — the table
+// reproduced its harmonics only to ~12 dB (§47) where hard managed 0.58.
+//
+// A sine folder y = sin(z*x) has an exact analytic harmonic structure: driven by
+// a sine of amplitude A it gives H_n = 2*J_n(zA), so H3/H1 = J3(zA)/J1(zA), and
+// inverting that against the measured ratio recovers z directly. Doing so at
+// every amplitude shows **z proportional to amplitude** (r = 0.91), which is the
+// signature of exactly this topology with a pre-gain.
+//
+// ⚠ Only r = 0.91, not 1. The recovered z DIPS around amp 0.6-0.7, and a pure
+// sine folder cannot produce a non-monotonic H3/H1. So this is close to the
+// real topology but not identical to it, and it is documented as such rather
+// than presented as the answer.
+//
+// Depth per unit amplitude, recovered per drive setting (§48):
+//     z = 2.5071*d^2 - 0.6669*d + 1.6061      (rms 0.234)
+struct Folder {
+    float z = 1.6061f, makeup = 1.0f;
+    void setDrive(float d) {
+        z = 2.5071f * d * d - 0.6669f * d + 1.6061f;
+        if (z < 0.05f) z = 0.05f;
+        // Normalise so the SMALL-SIGNAL gain matches the measured curve: near
+        // zero sin(z*x) ~ z*x, so the makeup carries the measured slope.
+        makeup = 1.0f / z * (1.6061f + 1.72f * d);
+    }
+    inline float run(float x) const {
+        const float u = z * x;
+        return std::sin(u < -3.14159265f ? -3.14159265f
+                        : (u > 3.14159265f ? 3.14159265f : u)) * makeup;
+    }
+};
+
 // ------------------------------------------------------------- pre-emphasis
 //
 // §35 measured that the fold law is FREQUENCY-WEIGHTED: the same amplitude
@@ -343,6 +377,8 @@ struct DrumBuss {
     Shaper drive, crunchShaper;
     Transients trans;
     Emphasis emph;
+    Folder folder;
+    bool useFolder = true;      // `soft` only; med and hard keep their tables
     // ⚠ OFF by default (0 dB = a no-op). §47: fitted against the four-carrier
     // data it moved the objective from 12.181 to 12.043 dB — i.e. nothing, and
     // the 12 dB baseline is the real problem. The mechanism is real and
@@ -385,6 +421,8 @@ struct DrumBuss {
         emph.set(emphFc, emphDb, sr);
         drive.select(p.driveType);
         drive.setDrive(p.drive);
+        folder.setDrive(p.drive);
+        useFolder = (p.driveType == 0);
         crunchShaper.selectCrunch();
         crunchShaper.setDrive(p.crunch);
         trans.set(p.trans);
@@ -404,7 +442,9 @@ struct DrumBuss {
             float l = dl * p.trim, r = dr * p.trim;      // §13 Trim is PRE
             trans.run(l, r);                             // §34 upstream of sat
             if (p.comp) comp.run(l, r);                  // §23 upstream of dist
-            if (emphDb != 0.0f) {          // shelf -> shaper -> inverse shelf
+            if (useFolder) {               // §48: soft is a folder, not a curve
+                l = folder.run(l); r = folder.run(r);
+            } else if (emphDb != 0.0f) {   // shelf -> shaper -> inverse shelf
                 l = emph.post(0, drive.run(emph.pre(0, l)));
                 r = emph.post(1, drive.run(emph.pre(1, r)));
             } else {
