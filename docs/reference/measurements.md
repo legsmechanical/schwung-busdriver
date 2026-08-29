@@ -634,3 +634,31 @@ crossover moving from amp ≈0.93 (100 Hz) to ≈0.87 (1 kHz).
 ⭑ **Working model: pre-emphasis → fixed folding shaper → makeup.** The shaper is driven ~2–3 dB
 harder at high frequencies, which is what a mid-high emphasis before the fold would do — and it
 echoes what Crunch does elsewhere in the device.
+
+---
+
+# 36. FITTED: the compressor law
+
+Fitting `−GR = f(level; threshold, ratio, knee)` to §17's compressor-alone curve, over the region
+where it is actually compressing:
+
+**threshold −19.99 dBFS · ratio 2.34:1 · soft knee ±1.76 dB · residual 0.589 dB rms**
+
+| in dBFS | measured GR | model | err |
+|---|---|---|---|
+| −24 | +0.98 | 0.00 | −0.98 |
+| −18 | −0.72 | −1.14 | −0.42 |
+| −12 | −4.85 | −4.58 | +0.27 |
+| −6 | −8.60 | −8.02 | +0.58 |
+| −3 | −9.98 | −9.74 | +0.24 |
+| 0 | −10.77 | −11.45 | −0.68 |
+
+⚠ **This corrects the "~4.3:1" quoted in §17.** That figure was output-vs-input across the whole
+DEVICE, where the always-on saturation is compressing alongside the compressor. The compressor's
+**own** ratio is **2.34:1**. Building with 4.3 would double-count the saturation the Drive stage
+already supplies.
+
+⚠ **Still unexplained: the +1.0 to +1.2 dB RISE between −48 and −24 dBFS**, deliberately excluded
+from the fit because no compressor law produces it. It is consistent across four levels, so it is
+real. Candidates: an upward-expansion or "pop" stage, or makeup interacting with a detector that
+is not purely peak. Worth a dedicated cell before it is modelled.
