@@ -330,3 +330,75 @@ measure different things: Farina gives the linear response with harmonics exclud
 two-tone sees the total, including intermodulation. **So Crunch's high-frequency character comes
 from harmonic generation, not from an EQ curve** — which means modelling it as a band-split
 filter plus a shaper would reproduce the two-tone number by the wrong mechanism.
+
+---
+
+# Harmonics, topology and Transients (2026-08-28)
+
+`tools/harmonics.py` (orders separated in time by the Farina deconvolution — order N lands
+L·ln(N) = 1.003 s per octave ahead of the linear response) and `tools/transients.py`.
+
+## 22. CONFIRMED: every Drive type is ODD-dominated — no deliberate asymmetry
+
+Harmonic orders relative to the linear response (dB):
+
+| cell | H2 | H3 | H4 | H5 | even−odd |
+|---|---|---|---|---|---|
+| soft 0.0 | −46.9 | −26.6 | −70.9 | −55.1 | −18.0 |
+| soft 1.0 | −36.6 | **−13.4** | −39.9 | −24.6 | −19.3 |
+| med 1.0 | −29.7 | **−10.3** | −32.2 | −16.3 | −17.6 |
+| hard 0.0 | −43.3 | −21.6 | −59.6 | −44.1 | −18.6 |
+| hard 1.0 | −33.0 | −11.6 | −36.4 | −19.9 | −18.9 |
+| crunch 1.0 | −31.7 | −10.1 | −34.9 | −18.7 | −18.9 |
+
+**Even orders sit ~18–20 dB below odd ones at every setting** — the shapers are essentially
+symmetric. ⚠ **Our module's Crunch deliberately adds an asymmetric term to make even harmonics**
+("tanh alone is an ODD function… which is why it read as fuzz rather than warmth"). Drum Buss does
+not do that. Under the campaign's "Ableton wins" rule, that asymmetry goes.
+
+**soft and med are IDENTICAL at Drive 0** (both −46.9 / −26.6); **hard is already distorting there**
+(−43.3 / −21.6), consistent with its different baseline gain (§2).
+
+## 23. CONFIRMED: **Comp is UPSTREAM of the distortion**
+
+The decisive argument is the harmonic-to-linear RATIO. A gain *after* a clipper scales harmonics
+and linear response equally, so the ratio cannot move. Toggling Comp moves it:
+
+- hard 1.0: H3 **−11.6 → −12.6**, H5 **−19.9 → −23.1** (comp ON *reduces* distortion — its gain
+  reduction means the clipper sees less)
+- soft 0.5: H3 **−15.9 → −14.0** (comp ON *increases* it — here the +11 dB makeup dominates)
+
+Opposite signs, same conclusion: the compressor changes **what the clipper sees**, which is only
+possible upstream. Matches the manual, now measured.
+
+## 24. CONFIRMED: **Damp is downstream of Crunch** (second, independent evidence)
+
+Crunch 1.0 with Damp at 20 kHz vs 500 Hz: H2 **−31.7 → −52.3**, H4 **−34.9 → −56.1**. Damp
+attenuates Crunch's harmonic products by ~21 dB, so it must follow it. (§15 reached the same
+conclusion from the two-tone; this is a different instrument.)
+
+`topo_tr-1_hard1` vs `topo_hard_nocomp` differ by 0.3 dB in H3 — on a steady sweep the transient
+stage is inert, so that cell cannot place it. It needs the `hits` probe (§25).
+
+## 25. CONFIRMED: Transients is **asymmetric by sign**
+
+Per-hit onset (first 10 ms peak) and tail (100–220 ms RMS), vs neutral:
+
+| Transients | onset | tail |
+|---|---|---|
+| −1.0 | −0.43 | **−2.46** |
+| −0.5 | +0.11 | −1.51 |
+| −0.25 | +0.15 | −0.68 |
+| +0.25 | +1.19 | +0.70 |
+| +0.5 | +3.31 | +1.49 |
+| +1.0 | **+8.02** | **+3.38** |
+
+- **Negative acts almost entirely on the TAIL** — a gate. The onset barely moves (−0.43 dB at full
+  cut). Matches the tutorial's "works as a gate… everything is super short".
+- **Positive raises BOTH**, onset-weighted (+8.02 vs +3.38). Matches the manual's "adds attack
+  and sustain".
+
+⭑ So it is neither a symmetric transient designer nor a broadband gain — it is **one control with
+two different behaviours depending on sign**. DR32 split this into orthogonal Attack and Sustain
+because "attack and tail moving together" was treated as a defect; in Drum Buss that coupling is
+real, but only on the positive side.
