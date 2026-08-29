@@ -175,6 +175,44 @@ struct Shaper {
     }
 };
 
+// ------------------------------------------------------------- pre-emphasis
+//
+// §35 measured that the fold law is FREQUENCY-WEIGHTED: the same amplitude
+// sweep at four carriers gives the same SHAPE offset by ~5 dB, with 1 kHz and
+// 3 kHz consistently hotter than 100 Hz and 300 Hz, and the H3=H1 crossover
+// moving from amp 0.93 to 0.87. So the shaper is driven 2-3 dB harder at high
+// frequencies.
+//
+// The shapers themselves were measured at ONE carrier (100 Hz) and were applied
+// broadband, which cannot reproduce that. §46 traced the model's ~4.4 dB error
+// floor — present even with almost nothing engaged, and growing as stages stack
+// — to exactly this.
+//
+// Structure: shelf -> shaper -> INVERSE shelf. The pair is complementary, so a
+// linear "shaper" leaves the response flat (which is what Farina measured for
+// the device, §19 neutral flat within 2.4 dB) while a nonlinear one generates
+// frequency-dependent harmonics. That is the mechanism, not a tone control
+// bolted on to hit a number.
+struct Emphasis {
+    float a = 0.0f;            // one-pole split
+    float A = 1.0f;            // high-band boost going in
+    float z[2] = {0.0f, 0.0f}, zi[2] = {0.0f, 0.0f};
+
+    void set(float fc, float boostDb, float sr) {
+        a = 1.0f - std::exp(-2.0f * 3.14159265f * fc / sr);
+        A = std::pow(10.0f, boostDb / 20.0f);
+    }
+    void reset() { z[0]=z[1]=zi[0]=zi[1]=0.0f; }
+    inline float pre(int c, float x) {
+        z[c] += a * (x - z[c]);
+        return z[c] + A * (x - z[c]);          // lows flat, highs * A
+    }
+    inline float post(int c, float x) {
+        zi[c] += a * (x - zi[c]);
+        return zi[c] + (1.0f / A) * (x - zi[c]);
+    }
+};
+
 // ---------------------------------------------------------------- Transients
 //
 // §41 measured law, ASYMMETRIC BY SIGN. Negative is a gate — the onset stays
@@ -293,7 +331,7 @@ struct DrumBuss {
         applyAll();
     }
     void reset() {
-        comp.reset(); damp.reset(); boom.reset(); trans.reset();
+        comp.reset(); damp.reset(); boom.reset(); trans.reset(); emph.reset();
         bq1[0]=bq1[1]=bq2[0]=bq2[1]=bhp[0]=bhp[1]=0.0f;
     }
 
@@ -304,6 +342,13 @@ struct DrumBuss {
 
     Shaper drive, crunchShaper;
     Transients trans;
+    Emphasis emph;
+    // ⚠ OFF by default (0 dB = a no-op). §47: fitted against the four-carrier
+    // data it moved the objective from 12.181 to 12.043 dB — i.e. nothing, and
+    // the 12 dB baseline is the real problem. The mechanism is real and
+    // measured (§35) but is not what limits the model, so it ships inert rather
+    // than tuned to look useful. The code stays because the finding is real.
+    float emphFc = 600.0f, emphDb = 0.0f;
 
     // §38 pre-gain laws, quadratic in Drive, fitted to under 0.1 dB rms.
     static float medGainDb(float d)    { return -3.162f*d*d + 15.003f*d - 1.931f; }
@@ -337,6 +382,7 @@ struct DrumBuss {
 
     void applyAll() {
         apply();
+        emph.set(emphFc, emphDb, sr);
         drive.select(p.driveType);
         drive.setDrive(p.drive);
         crunchShaper.selectCrunch();
@@ -358,7 +404,12 @@ struct DrumBuss {
             float l = dl * p.trim, r = dr * p.trim;      // §13 Trim is PRE
             trans.run(l, r);                             // §34 upstream of sat
             if (p.comp) comp.run(l, r);                  // §23 upstream of dist
-            l = drive.run(l); r = drive.run(r);
+            if (emphDb != 0.0f) {          // shelf -> shaper -> inverse shelf
+                l = emph.post(0, drive.run(emph.pre(0, l)));
+                r = emph.post(1, drive.run(emph.pre(1, r)));
+            } else {
+                l = drive.run(l); r = drive.run(r);
+            }
             if (p.crunch > 0.0f) { l = crunchShaper.run(l); r = crunchShaper.run(r); }
             damp.run(l, r);                              // §24 after Crunch
             runBoom(l, r);

@@ -81,6 +81,8 @@ static void bd_set(bd_t *I, const char *key, float v) {
     else if (!strcmp(key, "_tr_upexp")) { I->d.trans.upExp   = v; }
     else if (!strcmp(key, "_tr_dn"))    { I->d.trans.dnScale = v; }
     else if (!strcmp(key, "_tr_us"))    { I->d.trans.upSus   = v; }
+    else if (!strcmp(key, "_pe_fc"))    { I->d.emphFc = v; }
+    else if (!strcmp(key, "_pe_db"))    { I->d.emphDb = v; }
     else if (!strcmp(key, "_tr_dnexp")) { I->d.trans.dnExp   = v; }
     else if (!strcmp(key, "_tr_fast"))  { I->d.trans.msFast  = v; I->d.trans.setSampleRate(I->d.sr); }
     else if (!strcmp(key, "_tr_rel"))   { I->d.trans.msRel   = v; I->d.trans.setSampleRate(I->d.sr); }
@@ -182,6 +184,8 @@ static int bd_get_param(void *inst, const char *key, char *buf, int n) {
         else if (!strcmp(key,"_tr_upexp")) v = I->d.trans.upExp;
         else if (!strcmp(key,"_tr_dn")) v = I->d.trans.dnScale;
         else if (!strcmp(key,"_tr_us")) v = I->d.trans.upSus;
+        else if (!strcmp(key,"_pe_fc")) v = I->d.emphFc;
+        else if (!strcmp(key,"_pe_db")) v = I->d.emphDb;
         else if (!strcmp(key,"_tr_dnexp")) v = I->d.trans.dnExp;
         else if (!strcmp(key,"_tr_fast")) v = I->d.trans.msFast;
         else if (!strcmp(key,"_tr_rel")) v = I->d.trans.msRel;

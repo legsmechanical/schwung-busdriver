@@ -870,3 +870,40 @@ exactly the shape of a floor that grows as stages stack.
 
 **▶ Next step, well-founded rather than exploratory:** implement the pre-emphasis before the
 shapers, fit its filter against the four-carrier data already in `campaign2`, and re-score.
+
+## 47. The pre-emphasis was not the bottleneck either — and per-type fidelity is now measured
+
+Fitting the shelf against the four-carrier data (§35, training) over a grid of corner and boost:
+
+| | 0 dB | 1.5 | 2.5 | 3.5 | 5.0 |
+|---|---|---|---|---|---|
+| 200 Hz | 12.181 | 12.459 | 12.392 | 12.254 | **12.043** |
+| 600 Hz | 12.181 | 12.414 | 12.424 | 12.389 | 12.322 |
+| 1600 Hz | 12.181 | 12.414 | 12.499 | 12.549 | 12.589 |
+
+**Best case moves the objective by 0.14 dB against a 12.18 dB baseline.** The shelf is not the
+problem; the 12 dB baseline is. It **ships inert** (0 dB) rather than tuned to look useful — the
+mechanism is real and measured, it just is not what limits the model.
+
+### What actually limits it: the shapers, per type
+
+H3−H1 against input amplitude at 100 Hz — the carrier the tables were measured at — ours vs Live:
+
+| stage | rms error |
+|---|---|
+| neutral (the always-on saturation) | **0.30 dB** |
+| hard 1.0 | **0.58 dB** |
+| med 1.0 | 4.16 dB |
+| soft 1.0 | **~12 dB** |
+
+**The static-LUT approach is excellent for neutral and hard, mediocre for med, and fails for
+soft.** That ordering is exactly the measured per-bin widths (§27, §37): a hard clipper flattens
+phase differences so a static curve captures it, while `soft` folds and has real memory that no
+static curve can carry. `med` sits between — §37 fit its CURVE to 0.006–0.070 rms, yet its
+harmonics are 4 dB out, which means the curve is right and the stage still is not memoryless.
+
+**▶ The remaining work is now specific rather than exploratory:**
+1. **`soft` needs a real folder**, not a table — a wavefolder with its own topology, fitted to the
+   four-carrier harmonic data.
+2. **`med` needs a memory term** — its curve is right and its harmonics are not.
+3. `neutral` and `hard` are done to under 0.6 dB and should not be touched.
