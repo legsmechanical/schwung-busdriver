@@ -828,3 +828,45 @@ added, and that part is kept.
 And fit against **training data** — campaigns 1–3 — never against the 22-preset score, which is
 the only independent measure the campaign has. Fitting to it would convert validation into
 training and the number would stop meaning anything.
+
+## 46. The second fit also failed, and that located the real bottleneck
+
+Refitting Transients **spectrally against Live's own transient-cell renders** (training data, not
+the validation presets) gave the best training error of the three candidates — and still did not
+improve validation:
+
+| constants | training (spectral, transient cells) | validation (22 presets) |
+|---|---|---|
+| hand-picked | 4.020 dB | **5.55 dB** |
+| fitted to onset/tail | 5.002 dB | 6.40 dB |
+| fitted spectrally | **3.460 dB** | 6.02 dB |
+
+The training objective ranks them consistently with each other, but the narrow training set — the
+transient ladder alone, with no drive, crunch or boom — does not represent presets that combine
+stages. **Shipped constants are the spectrally fitted ones**, chosen on training data because
+choosing on the validation score would convert validation into training. The choice barely
+matters, for the reason below.
+
+### Where the error actually is
+
+| preset group | median spectral error |
+|---|---|
+| Transients = 0 (n=5) | **4.83 dB** |
+| Transients ≠ 0 (n=17) | 7.55 dB |
+| ≤1 of drive/crunch/boom (n=2) | 4.39 dB |
+| **2+ of drive/crunch/boom (n=12)** | **7.69 dB** |
+
+Two things at once: a **~4.4 dB floor with almost nothing engaged**, and **accumulation** as stages
+stack. No amount of Transients tuning reaches either.
+
+### 🔴 The most likely cause, and it is something already measured and not implemented
+
+**The shaper tables were measured at ONE carrier (100 Hz) and are applied broadband.** §35 measured
+that the fold law is **frequency-weighted** — the shaper is driven 2–3 dB harder at 1–3 kHz than at
+100–300 Hz, with the H3=H1 crossover moving from amp 0.93 to 0.87. That pre-emphasis was measured,
+written down, and never built. A static curve applied flat cannot reproduce a stage whose effective
+drive depends on frequency, and every shaping stage in the chain has that property — which is
+exactly the shape of a floor that grows as stages stack.
+
+**▶ Next step, well-founded rather than exploratory:** implement the pre-emphasis before the
+shapers, fit its filter against the four-carrier data already in `campaign2`, and re-score.

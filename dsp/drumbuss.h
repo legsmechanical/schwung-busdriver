@@ -195,17 +195,20 @@ struct Transients {
     // END TO END against the measured onset/tail table, not on the isolated
     // stage — the measurement is of the whole device, and the saturation
     // downstream changes what any transient boost turns into.
-    // FITTED end to end against the measured onset/tail table (§25, §41):
-    // rms 0.368 dB, down from 2.162 for the hand-picked values.
-    float upScale = 4.320f, upExp = 2.940f, dnScale = 1.137f, dnExp = 0.942f;
+    // FITTED SPECTRALLY against Live's own renders of the transient cells
+    // (§45). NOT against the onset/tail table: that fit scored 0.368 dB on its
+    // own summary and 5.002 dB spectrally — the WORST of the three — while the
+    // hand-picked values scored 4.020. Matching two summary numbers per setting
+    // says nothing about the audio between them.
+    float upScale = 2.627f, upExp = 0.532f, dnScale = 0.814f, dnExp = 1.344f;
     // ⭑ The positive side needs a SUSTAIN term as well as an onset term. The
     // first version drove the boost purely from transient-ness, which is zero
     // during a decay, so it could never add sustain — fitted, it reproduced
     // +7.69 dB of onset and +0.01 dB of tail against a measured +3.38. The
     // manual's "adds attack AND sustain" (§25, §41) is structural, not a
     // description of a side effect.
-    float upSus = 1.244f;
-    float msFast = 0.058f, msRel = 50.0f, msSlow = 142.1f;   // fitted
+    float upSus = 0.630f;
+    float msFast = 1.507f, msRel = 50.0f, msSlow = 669.1f;   // fitted, §45
 
     float sr_ = 44100.0f;
     void setSampleRate(float sr) {
