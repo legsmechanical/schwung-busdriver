@@ -662,3 +662,55 @@ already supplies.
 from the fit because no compressor law produces it. It is consistent across four levels, so it is
 real. Candidates: an upward-expansion or "pop" stage, or makeup interacting with a detector that
 is not purely peak. Worth a dedicated cell before it is modelled.
+
+---
+
+# campaign3 (2026-08-29) — three shaping stages structurally solved
+
+Renders `rig/renders/campaign3/`, probe `suite3.wav` sha256 `7a8ed47773ba9dc1…`, gate PASS
+bit-exact. Curves from the 16 s **100 Hz** amplitude sweep, 401 bins.
+
+⚠ **My own method rule got violated first.** §32 says keep the lag search under one period; I
+searched ±250 against 441 samples/period at 100 Hz and half the cells locked onto the sign-flipped
+solution, producing negative curves again. Re-run with the search restricted to 140–250 (a quarter
+period, centred on the latency the clean cells agree on) and every cell comes back positive and
+consistent. **The rule needs enforcing in code, not remembering.**
+
+## 37. CONFIRMED: **med, hard and Crunch are each ONE fixed shaper + a pre-gain**
+
+Fitting `out = m · F(g · in)` with F taken as that family's own lowest-drive curve:
+
+| family | g range | m range | rms residual |
+|---|---|---|---|
+| **Crunch** | 1.000 → 1.762 | 1.000 → **0.999** | **0.0008 → 0.0035** |
+| **hard** | 1.000 → 3.939 | 1.000 → 0.967 | 0.007 → 0.030 |
+| **med** | 1.000 → 3.101 | 1.000 → 0.909 | 0.006 → 0.070 |
+
+**Crunch is essentially exact** — residual under 0.004 with makeup pinned at 1.000, so it is a
+fixed static shaper driven by a pre-gain and nothing else. Its per-bin width (0.014–0.064) already
+said it is memoryless. **Crunch is solved.**
+
+**hard and med** fit well too. Only **`soft` breaks this structure** (§29, §35), because it folds
+and a monotonic shape cannot be scaled into a fold.
+
+## 38. FITTED: the pre-gain laws (dB vs Drive)
+
+Quadratic in Drive fits all three to well under 0.1 dB:
+
+| family | law (dB) | rms |
+|---|---|---|
+| med | `−3.162·d² + 15.003·d − 1.931` | **0.086** |
+| hard | `+7.768·d² + 4.984·d − 0.779` | **0.051** |
+| Crunch | `−1.015·d² + 7.832·d − 1.896` | **0.003** |
+
+Full-scale pre-gain: med **+9.83 dB**, hard **+11.91 dB**, Crunch **+4.92 dB** (each relative to
+its reference cell). The two drive families curve oppositely — med's gain law bends *down* with
+drive, hard's bends *up* — which is why hard reaches clipping so much faster at the top.
+
+## 39. What remains
+
+- **`soft`'s fold shaper** — the only stage without a working parametric form. Its law is
+  shape-invariant but frequency-weighted (§35), so it needs a pre-emphasis plus a fold curve.
+- **Boom's Q and decay law** — campaign3's `hits` segment is rendered and not yet analysed.
+- **Transients' law** — the denser ladder is rendered and not yet analysed.
+- **The +1.1 dB pre-compression rise** (§36) — real, unexplained, unmodelled.
