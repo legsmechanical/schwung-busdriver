@@ -565,3 +565,72 @@ on alignment at all**:
 period.** At 1 kHz and 3 kHz the same search returned aliased lags (one railed at the −200 limit)
 and negative-valued curves. A low carrier makes the phase error small and the search unambiguous
 in one move.
+
+---
+
+# campaign2 results (2026-08-28) — the three blocked items
+
+Renders `rig/renders/campaign2/`, probe `suite2.wav` sha256 `a483fe89652c83cf…`, gate PASS with
+the dry track bit-exact (−300 dB). Lag from the 100 Hz curve per §32.
+
+## 33. CONFIRMED: compressor **release ≈ 420 ms**; **attack ≈ 1.8 ms**
+
+Time to 63% of the gain move, causal envelope, across five smoothing windows:
+
+| cell | GR present | w32 | w64 | w128 | w256 | verdict |
+|---|---|---|---|---|---|---|
+| neutral (no comp) | −1.00 dB | 0.14 | 0.50 | 0.23 | 0.63 | **~0 — the control works** |
+| comp_on | −10.72 dB | 469 | 418 | **409** | 426 | **≈420 ms** |
+| comp + drive 0.5 | −14.95 dB | 439 | 399 | **399** | 416 | **≈410 ms** |
+| comp + hard 1.0 | −27.35 dB | 488 | 479 | **486** | 495 | **≈485 ms** |
+
+**Release is converged and trustworthy** — stable across four windows, and the no-compressor
+control correctly reads ~0 rather than inheriting the window. Slightly longer under heavy drive
+(485 vs 410 ms).
+
+**Attack ≈ 1.8 ms**, from `comp_on` (2.00 / 1.77 / 1.54 / 1.86 across w32–w256). Weaker evidence
+than the release figure: the other cells' steps are clamped by saturation and fail the 0.3 dB
+gate. Treat as ~1.5–2 ms rather than a precise constant.
+
+⚠ w16 is below one cycle of the 2 kHz carrier and returns ~0.02 ms for everything — an artefact,
+not a measurement. Trust w32 and up.
+
+## 34. CONFIRMED: **Transients is UPSTREAM of the saturation**
+
+Harmonic content of a single 90 Hz kick body, dB relative to its own fundamental. With **no Drive
+at all**, so the only nonlinearity present is the always-on saturation:
+
+| cell | H2 | H3 | H5 |
+|---|---|---|---|
+| tr −1.0 | −72.0 | **−68.6** | −95.1 |
+| neutral | −75.6 | **−61.9** | −100.1 |
+| tr +1.0 | −67.4 | **−45.3** | −77.8 |
+
+**A 23 dB monotonic span in H3 driven purely by the Transients control.** The control changes how
+hard the saturation is driven, which is only possible if it precedes it. With a hard clipper added
+the same ordering holds (tr −1 → H3 −17.4, tr +1 → −15.0).
+
+⭑ Side finding: `tr_+1_boom075` has **H2 at −50.6 dB** against −67…−75 for every other cell, so
+**Boom contributes even-harmonic content** — consistent with a nonlinear sub generator rather than
+a plain resonant filter.
+
+## 35. The fold law is **shape-invariant but frequency-WEIGHTED**
+
+H3 − H1 (dB) against input amplitude, `soft` at Drive 1.0, same sweep at four carriers:
+
+| amp | 100 Hz | 300 Hz | 1 kHz | 3 kHz |
+|---|---|---|---|---|
+| 0.25 | −28.1 | −27.6 | −23.0 | −22.3 |
+| 0.49 | −18.1 | −20.5 | −13.4 | −14.0 |
+| 0.68 | −23.5 | −21.7 | −9.7 | −10.9 |
+| 0.87 | −2.7 | −4.0 | **0.0** | −1.4 |
+| 0.99 | +13.6 | +12.8 | **+17.5** | +16.6 |
+
+**The §29 hypothesis is refined, not confirmed.** The curves are *not* identical, so the fold is
+**not** a pure memoryless pre-gain into a fixed shaper. But they are the same SHAPE offset by a
+roughly constant ~5 dB, with 1 kHz/3 kHz consistently hotter than 100 Hz/300 Hz, and the H3=H1
+crossover moving from amp ≈0.93 (100 Hz) to ≈0.87 (1 kHz).
+
+⭑ **Working model: pre-emphasis → fixed folding shaper → makeup.** The shaper is driven ~2–3 dB
+harder at high frequencies, which is what a mid-high emphasis before the fold would do — and it
+echoes what Crunch does elsewhere in the device.
