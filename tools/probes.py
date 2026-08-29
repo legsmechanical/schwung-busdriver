@@ -286,9 +286,23 @@ PROBES2 = {
     'sw300':    (swept_at(300.0),    'fold law @ 300 Hz (matches the v1 suite)'),
     'sw1k':     (swept_at(1000.0),   'fold law @ 1 kHz'),
     'sw3k':     (swept_at(3000.0),   'fold law @ 3 kHz'),
+    'sw100L':   (lambda: swept_at(100.0)(seconds=16.0), '100 Hz amplitude sweep, long'),
     'hits':     (hits,               'transient stage + where it sits in the chain'),
 }
 SUITE2_ORDER = ['align2', 'steps2k', 'sw100', 'sw300', 'sw1k', 'sw3k', 'hits']
+
+# suite3: transfer curves are extracted at a LOW carrier (see the method rule in
+# measurements.md §32), so everything whose SHAPE we still need is measured on a
+# 100 Hz amplitude sweep. Long, because bin density at the extremes is what
+# limits curve precision. Plus hits for Boom's decay, which is temporal.
+PROBES3 = {
+    'align2': (align_chirp, 'broadband chirp: lag and polarity, unambiguous'),
+    'sw100L': (lambda: swept_at(100.0)(seconds=16.0),
+               '100 Hz amplitude sweep, 16 s — the curve probe. Long because bin '
+               'density at the extremes is what limits curve precision.'),
+    'hits':   (hits, 'Boom decay and transient behaviour'),
+}
+SUITE3_ORDER = ['align2', 'sw100L', 'hits']
 
 
 SUITE_ORDER = ['align', 'swept', 'twotone', 'sweep', 'bursts', 'steps', 'hits', 'ramp']
@@ -343,6 +357,14 @@ def main():
             'peak': round(max(abs(v) for v in l), 6), 'purpose': why,
         }
         print(f'{name:10s} {len(l)/SR:6.2f}s  peak {max(abs(v) for v in l):.3f}  {h[:16]}…  {why}')
+    p3, h3, off3, tot3 = build_named_suite(outdir, SUITE3_ORDER, PROBES3, 'suite3.wav')
+    manifest['suite3'] = {'file': 'suite3.wav', 'sha256': h3, 'frames': tot3,
+                          'seconds': round(tot3 / SR, 3), 'gap_seconds': GAP,
+                          'align_segment': 'align2', 'offsets': off3}
+    print(f'\nsuite3.wav {tot3/SR:6.2f}s  {h3[:16]}…  ({len(off3)} segments)')
+    for k, v in off3.items():
+        print(f'   {k:9s} @ {v["start"]/SR:6.2f}s  {v["seconds"]:5.2f}s')
+
     p2, h2, off2, tot2 = build_named_suite(outdir, SUITE2_ORDER, PROBES2, 'suite2.wav')
     manifest['suite2'] = {'file': 'suite2.wav', 'sha256': h2, 'frames': tot2,
                           'seconds': round(tot2 / SR, 3), 'gap_seconds': GAP,
