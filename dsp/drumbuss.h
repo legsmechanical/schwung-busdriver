@@ -324,7 +324,7 @@ struct DrumBuss {
     // Block processing. Order is the MEASURED one; see the header.
     void process(float *io, int n) {
         const float outG = p.outGain;
-        if (neutral()) {                       // §14: a true bypass, not "quiet"
+        if (neutral()) {                       // DryWet 0 only — see neutral()
             if (outG != 1.0f)
                 for (int i = 0; i < 2 * n; i++) io[i] *= outG;
             return;
@@ -346,13 +346,16 @@ struct DrumBuss {
         }
     }
 
-    // §14: DryWet 0 is a TRUE bypass, measured — slope 0.999, ceiling 0.996,
-    // two-tone gains 0.00 dB. So it must null, not merely be quiet.
-    bool neutral() const {
-        return !p.comp && p.drive <= 0.0f && p.crunch <= 0.0f &&
-               p.dampHz >= 19999.0f && std::fabs(p.trans) <= 1e-4f &&
-               p.boom <= 0.0f && p.dryWet >= 1.0f;
-    }
+    // 🔴 THE ONLY TRUE BYPASS IS DryWet = 0 (§14).
+    //
+    // ⚠ This started life checking "every control at rest", inherited from the
+    // DR32 stage this module grew out of, where neutral WAS transparent. Drum
+    // Buss is not: at its defaults it applies about +3.8 dB and SATURATES
+    // (§2, §4), measured on the held-out validation material as +3.04 dB with
+    // the peak pushed from 0.85 to 0.998. The wrong bypass cost 3 dB on every
+    // preset in the first validation run, and is exactly the kind of inherited
+    // assumption this campaign exists to remove.
+    bool neutral() const { return p.dryWet <= 0.0f; }
 };
 
 }  // namespace drumbuss

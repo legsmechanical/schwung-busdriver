@@ -38,7 +38,31 @@ def to_ours(p):
     }
 
 
+def check_fresh():
+    """Refuse to score with a stale render binary.
+
+    The first validation run reported identical numbers before and after a DSP
+    change, because build/render had not been rebuilt. A score is worthless if
+    it does not describe the code you just changed."""
+    src = []
+    here = os.path.dirname(os.path.abspath(__file__))
+    for rel in ('../src', '../dsp', '../shared'):
+        d = os.path.join(here, rel)
+        for root, _, fs in os.walk(d):
+            for f in fs:
+                if f.endswith(('.cpp', '.h')):
+                    src.append(os.path.getmtime(os.path.join(root, f)))
+    if not os.path.exists(RENDER):
+        raise SystemExit('build/render missing — build it first')
+    if src and max(src) > os.path.getmtime(RENDER):
+        raise SystemExit('🔴 build/render is OLDER than the sources. Rebuild it, '
+                         'or the score describes code you no longer have:\n'
+                         '   c++ -O2 -std=c++17 tools/render.cpp src/busdriver_module.cpp '
+                         '-Isrc -Ishared -Idsp -o build/render')
+
+
 def main():
+    check_fresh()
     renders, project = sys.argv[1], sys.argv[2]
     probe_path, man = resolve_probe(renders, project)
     off = man['suite']['offsets']
@@ -67,17 +91,39 @@ def main():
         live = read_wav(files[name])['l']
         mine = read_wav(ours)['l']
         a = seg(live, off, SEGN, 190)
-        b = seg(mine, off, SEGN, 0)
+        b0 = seg(mine, off, SEGN, 0)
+        # Align per preset rather than assuming a fixed lag: our filters have
+        # their own phase, and a fixed offset would charge that to the model.
+        best = None
+        for L in range(-64, 65):
+            bb = seg(mine, off, SEGN, L)
+            m = min(len(a), len(bb))
+            if m < 1000: continue
+            c = float(a[:m] @ bb[:m])
+            if best is None or c > best[0]: best = (c, L)
+        b = seg(mine, off, SEGN, best[1] if best else 0)
         m = min(len(a), len(b)); a, b = a[:m], b[:m]
         lvl = db(np.sqrt((b*b).mean() + 1e-30)) - db(np.sqrt((a*a).mean() + 1e-30))
-        # spectral distance: log-magnitude error over 1/3-octave bands
+
+        # 1/3-OCTAVE spectral distance. Raw per-bin log differences are noisy and
+        # inflate an rms even for two very similar signals; thirds are the
+        # standard, and are what a listener would notice.
         n = 1 << 15
-        A = np.abs(np.fft.rfft(a[:n] * np.hanning(min(n, len(a)))[:min(n,len(a))], n))
-        B = np.abs(np.fft.rfft(b[:n] * np.hanning(min(n, len(b)))[:min(n,len(b))], n))
+        w = np.hanning(min(n, m))
+        A = np.abs(np.fft.rfft(a[:len(w)] * w, n))
+        B = np.abs(np.fft.rfft(b[:len(w)] * w, n))
         f = np.fft.rfftfreq(n, 1/44100)
-        band = (f > 40) & (f < 16000)
-        sa = db(A[band] / (A[band].max() + 1e-30))
-        sb = db(B[band] / (B[band].max() + 1e-30))
+        centres = 40.0 * 2 ** (np.arange(0, 27) / 3.0)
+        centres = centres[centres < 16000]
+        ea, eb = [], []
+        for fc in centres:
+            lo, hi = fc / 2**(1/6), fc * 2**(1/6)
+            k = (f >= lo) & (f < hi)
+            if k.sum() < 2: continue
+            ea.append(np.sqrt((A[k]**2).mean())); eb.append(np.sqrt((B[k]**2).mean()))
+        ea, eb = np.array(ea), np.array(eb)
+        vdb = lambda v: 20.0 * np.log10(np.maximum(v, 1e-12))
+        sa = vdb(ea / (ea.max() + 1e-30)); sb = vdb(eb / (eb.max() + 1e-30))
         spec = float(np.sqrt(np.mean((sa - sb) ** 2)))
         g = float(a @ b / (b @ b)) if (b @ b) else 0.0
         res = db(float(np.sqrt(((g*b - a) ** 2).mean()) / (np.sqrt((a*a).mean()) + 1e-30)))

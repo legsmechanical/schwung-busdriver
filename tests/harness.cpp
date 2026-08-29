@@ -53,17 +53,28 @@ int main() {
     audio_fx_api_v2_t *api = move_audio_fx_init_v2(nullptr);
     ok(api && api->api_version == AUDIO_FX_API_VERSION_2, "api v2");
 
-    /* Neutral is a TRUE bypass — measurements §14 found DryWet=0 returns the
-     * input, and our neutral must do the same rather than merely be quiet. */
-    { Fx f(api); auto d = sine(0.5f, 220.f, SR/4); auto w = d; f.run(w);
-      ok(memcmp(d.data(), w.data(), d.size()*2) == 0, "neutral is bit-identical to dry"); }
+    /* §14: DryWet = 0 is the ONLY true bypass, and it must NULL. */
+    { Fx f(api); f.set("drywet", 0.0);
+      auto d = sine(0.5f, 220.f, SR/4); auto w = d; f.run(w);
+      ok(memcmp(d.data(), w.data(), d.size()*2) == 0, "drywet=0 is bit-identical to dry"); }
 
-    /* §13: Output is an exact linear gain, POST the nonlinearity. */
-    { auto in = sine(0.05f, 220.f, SR/4); double i0 = db(rms(in));
+    /* §2/§4: the device at DEFAULTS is NOT transparent — it applies gain and
+     * saturates. Measured +3.04 dB on the held-out validation material. Getting
+     * this wrong cost 3 dB on every preset in the first validation run. */
+    { Fx f(api); auto d = sine(0.2f, 220.f, SR/4); auto w = d; f.run(w);
+      double g = db(rms(w)) - db(rms(d));
+      ok(g > 2.0 && g < 5.0, "defaults apply the always-on gain (%.2f dB)", g);
+      ok(memcmp(d.data(), w.data(), d.size()*2) != 0, "defaults are NOT a bypass"); }
+
+    /* §13: Output is an exact linear gain, POST the nonlinearity. Reference is
+     * the device at output 0 dB, NOT the raw input — the device is not
+     * transparent, so comparing to the input would fold the saturation in. */
+    { auto in = sine(0.05f, 220.f, SR/4);
+      Fx ref(api); auto r = in; ref.run(r); double r0 = db(rms(r));
       { Fx f(api); f.set("output", 3.0);  auto v=in; f.run(v);
-        ok(fabs(db(rms(v))-i0-3.0) < 0.05, "output +3 dB is exact"); }
+        ok(fabs(db(rms(v))-r0-3.0) < 0.05, "output +3 dB is exact (%.3f)", db(rms(v))-r0); }
       { Fx f(api); f.set("output",-12.0); auto v=in; f.run(v);
-        ok(fabs(db(rms(v))-i0+12.0) < 0.05, "output -12 dB is exact"); } }
+        ok(fabs(db(rms(v))-r0+12.0) < 0.05, "output -12 dB is exact (%.3f)", db(rms(v))-r0); } }
 
     /* §19: Damp's -3 dB corner IS the parameter value in Hz. */
     { auto lo = sine(0.05f, 100.f, SR/2), hi = sine(0.05f, 2000.f, SR/2);

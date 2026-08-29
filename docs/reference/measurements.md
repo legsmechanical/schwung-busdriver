@@ -750,3 +750,55 @@ Confirms §25 with more points and sharpens it: on the **negative** side the ons
 0.3 dB while the tail falls — a pure gate. On the **positive** side both rise, onset-weighted.
 ⭑ The law is strongly nonlinear near the top: +0.75 gives +2.93 dB of onset where +1.0 gave
 **+8.02** (§25), so most of the control's range lives in its last quarter.
+
+---
+
+# 42. VALIDATION — the campaign's actual result
+
+`tools/score.py`, against `rig/renders/campaign4/`: Live's **22 stock Drum Buss presets** at their
+shipped values, on material (`suite4`/`valid`) never used for any fit. Gate PASS, dry bit-exact.
+
+⚠ `hits` was deliberately NOT used as the validation probe — it fed the Transients law (§41) and
+Boom's decay (§40), so it is not held out.
+
+**Level error: median +0.76 dB, worst +4.35 dB.**
+**1/3-octave spectral error: median 5.55 dB, worst 14.54 dB.**
+
+**This is a working first model, not a finished clone.** Level tracking is good; the spectral
+match is not yet close enough to call it a model of the device.
+
+## 43. What validation caught that nothing else did
+
+🔴 **The device is NOT transparent at its defaults, and our module thought it was.** `neutral()`
+checked "every control at rest" — inherited from the DR32 stage this module grew out of, where
+neutral genuinely was a bypass. Drum Buss at defaults applies **+3.04 dB and saturates** (peak
+pushed 0.85 → 0.998 on the validation material). That cost **3 dB on every preset** in the first
+run. The only true bypass is `DryWet = 0`.
+
+An inherited assumption, invisible to every stage-level measurement because each of those compared
+one setting against another *within* the device. Only end-to-end scoring against real presets
+exposed it.
+
+⚠ **A stale binary nearly hid the fix.** The first re-score after correcting the bypass returned
+byte-identical numbers, because `build/render` had not been rebuilt. `score.py` now refuses to run
+when the sources are newer than the binary.
+
+## 44. Where the remaining error is
+
+Correlation of spectral error against each control, across the 22 presets:
+
+| control | corr |
+|---|---|
+| Crunch | +0.34 |
+| \|Transients\| | +0.32 |
+| Drive | +0.17 |
+| Boom | +0.07 |
+
+**No single stage dominates** — the correlations are weak and the worst presets combine several
+stages, so the errors are compounding rather than tracing to one bad law. Best cells are the
+simple ones (Compression Gate 1.87 dB, Drum Softener 2.20, Boom in E 2.39); worst are the busy
+ones (Punchy Driven 14.54, Squeeze & Drive 12.24).
+
+**Honest reading:** each stage is individually close, and stacking five of them accumulates error.
+Closing this means iterating fits *against this score* rather than against per-stage measurements
+— which is exactly what the score exists for, and it is now a one-command loop.
