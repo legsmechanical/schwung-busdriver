@@ -266,3 +266,67 @@ band-limited noise burst, giving ~10x the resolution. Cheap to add to the next S
 
 ⚠ **Method note worth keeping:** run a window-sensitivity sweep before believing any envelope-
 derived time constant. If the answer moves with the window, the window is the answer.
+
+---
+
+# Filters, by Farina deconvolution (2026-08-28)
+
+`tools/filters.py`. Sweep deconvolution rather than a tone ladder, because the device saturates
+even at Drive 0 — a plain FFT(out)/FFT(in) would fold harmonic products into the "filter". The
+linear IR is windowed at the deconvolution peak; harmonic orders arrive ~0.8 s earlier and are
+excluded. Neutral comes out flat within 2.4 dB across the band (63 Hz +102.49, 1 kHz +100.55,
+8 kHz +102.96), which is the check that the method is working.
+
+⚠ First run reported a LOW-PASS boosting +6.80 dB at 2 kHz, with neutral sloping 143 → 59 dB.
+Cause: the inverse filter's envelope was time-reversed. It indexes FORWARD over the reversed
+sweep — index 0 is the HIGH-frequency end, so `exp(-t/L)` must be 1 there. `exp(-t[::-1]/L)`
+flips it and tilts the whole result by ~84 dB.
+
+## 19. CONFIRMED: **Damp is a one-pole low-pass, corner = the parameter in Hz**
+
+Relative to neutral (dB):
+
+| Damp | 500 | 1k | 2k | 4k | 8k | 16k |
+|---|---|---|---|---|---|---|
+| 500 | **−2.81** | −6.64 | −11.67 | −17.12 | −22.76 | −27.29 |
+| 1000 | −0.89 | **−2.80** | −6.44 | −11.34 | −16.79 | −21.30 |
+| 2000 | −0.24 | −0.88 | **−2.65** | −6.15 | −11.00 | −15.35 |
+| 4000 | −0.06 | −0.23 | −0.80 | **−2.44** | −5.80 | −9.58 |
+| 8000 | −0.01 | −0.05 | −0.19 | −0.66 | **−2.06** | −4.42 |
+| 16000 | −0.00 | −0.01 | −0.02 | −0.08 | −0.27 | −0.75 |
+
+**−3 dB lands on the setting itself, every time**, and the slope is ≈−5.5 dB/octave. So the whole
+stage is: one-pole LP, `fc = DampingFrequency`. **This stage is done.** Its group delay (§11)
+independently agrees.
+
+## 20. Boom: a resonant peak **plus a high-pass that tracks it**
+
+Not a shelf. At `BoomFrequency = 50`, amount 0.75, relative to neutral (dB):
+
+| Hz | 20 | 25 | 30 | 35 | 40 | 45 | 50 | 60 | 70 | 80 | 100 | 120 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| | −7.8 | −6.4 | −4.1 | −1.6 | **+3.8** | **+4.5** | +3.7 | +3.7 | +3.0 | +2.1 | +0.5 | +0.0 |
+
+It **boosts around the tuned frequency and CUTS everything below it** — −7.8 dB at 20 Hz. That is
+deliberate: a sub generator that also added subsonic mud would be unusable.
+
+The high-pass **tracks the tuning**: at `BoomFrequency` 30 / 50 / 70 / 90 the 20 Hz point reads
+**+0.07 / −7.77 / −14.33 / −23.35** dB and the peak moves to ~28 / 45 / 65 / 100 Hz.
+
+**`BoomAmount` saturates above 0.75** — 0.75 → 1.0 moves the peak by 0.07 dB and the 20 Hz cut by
+0.04 dB. Confirms §12 on an independent instrument.
+
+**`BoomDecay` changes the resonance shape modestly** in steady state (125 Hz reads −1.97 / −1.61 /
+−1.15 / −0.58 for decay 0 / 0.25 / 0.5 / 0.75) — longer decay, narrower. Its main effect is
+temporal and needs the `hits` segment.
+
+## 21. ⭑ Crunch's "brightness" is NOT a filter
+
+Its LINEAR response (Crunch 1.0, no Damp) is a broad **mid** boost: +1.94 @63, +3.64 @125,
++3.94 @250, +4.86 @500, **+4.98 @1k**, +4.15 @2k, +3.64 @4k, +3.85 @8k, +0.22 @16k.
+
+But the two-tone test (§10) showed 60 Hz **−4.03** and 6 kHz **+6.77**. Both are true and they
+measure different things: Farina gives the linear response with harmonics excluded, while the
+two-tone sees the total, including intermodulation. **So Crunch's high-frequency character comes
+from harmonic generation, not from an EQ curve** — which means modelling it as a band-split
+filter plus a shaper would reproduce the two-tone number by the wrong mechanism.
