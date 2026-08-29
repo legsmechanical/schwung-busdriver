@@ -175,6 +175,44 @@ struct Shaper {
     }
 };
 
+// ------------------------------------------------------------- oversampling
+//
+// §51: the shaping stages alias audibly. Measured with a pure tone in and
+// everything that is NOT a harmonic of it measured out: at a 5 kHz input,
+// med / hard / crunch put aliased content only **5-6 dB below** the harmonics
+// they are meant to produce (-17.3 / -16.2 / -18.4 dB re the fundamental). That
+// is the harshness you hear on hats and snare tops, and no amount of curve
+// fidelity fixes it.
+//
+// 2x oversampling around the shapers moves the alias-free limit to the 8th
+// harmonic of a 5 kHz tone, which covers what these stages actually generate.
+// The device has CPU to spare — the whole module measured 0.788% of one A72
+// core with every stage on — so this is cheap insurance rather than a luxury.
+//
+// Halfband FIR, 15 taps, odd taps zero except the centre: only 4 multiplies per
+// output on the upsample and 4 on the downsample.
+struct Halfband {
+    // Symmetric halfband, centre 0.5, odd taps only. Written in the obvious
+    // zero-stuff form rather than polyphase: the first attempt split the
+    // branches by hand, mismatched them, and lost 4.5 dB of gain. This version
+    // is verified by a NULL TEST (shaper bypassed, in vs out) rather than by
+    // inspection.
+    // Normalised so the odd taps sum to 0.25 per side, i.e. DC gain exactly 1.
+    // Unnormalised they summed to 0.2401, costing 0.33 dB over the round trip —
+    // small, but it would have shown up as a mysterious level error later.
+    static constexpr float c1 = 0.323948f, c3 = -0.101572f,
+                           c5 = 0.043471f, c7 = -0.015848f;
+    float z[16] = {0};
+    int w = 0;
+    void reset() { for (int i = 0; i < 16; i++) z[i] = 0.0f; w = 0; }
+    inline void push(float x) { z[w & 15] = x; w++; }
+    inline float at(int b) const { return z[(w - 1 - b) & 15]; }
+    inline float filt() const {
+        return 0.5f * at(7) + c1 * (at(6) + at(8)) + c3 * (at(4) + at(10))
+                            + c5 * (at(2) + at(12)) + c7 * (at(0) + at(14));
+    }
+};
+
 // ---------------------------------------------------------------- the folder
 //
 // §48: `soft` is a FOLDER, and a static table cannot represent it — the table
@@ -206,6 +244,41 @@ struct Folder {
         const float u = z * x;
         return std::sin(u < -3.14159265f ? -3.14159265f
                         : (u > 3.14159265f ? 3.14159265f : u)) * makeup;
+    }
+};
+
+// ---------------------------------------------------------------- the limiter
+//
+// §50: `med` is a LIMITER, not a waveshaper. Its measured static curve fits to
+// 0.006-0.070 rms (§37) and yet, applied as a waveshaper, it produces ~5 dB
+// MORE third harmonic than the device (§47). That combination is diagnostic: a
+// stage whose average input/output relationship is right while its harmonic
+// output is too high is applying smooth GAIN REDUCTION, not clipping the
+// waveform. The tutorial calls this type "limiting distortion"; the measurement
+// agrees.
+//
+// So the same measured curve is used, but as a GAIN TARGET rather than a
+// transfer function: the envelope selects a gain from the curve, that gain is
+// smoothed, and the smoothed gain multiplies the signal. Steady state is
+// identical to the waveshaper; the harmonics are far lower, because the gain no
+// longer changes within a cycle.
+struct Limiter {
+    float aAtk = 0.0f, aRel = 0.0f, env[2] = {0,0}, g[2] = {1.0f, 1.0f};
+    float msAtk = 0.30f, msRel = 12.0f;      // fitted, §50
+
+    void setSampleRate(float sr) {
+        aAtk = 1.0f - std::exp(-1.0f / (msAtk * 1e-3f * sr));
+        aRel = 1.0f - std::exp(-1.0f / (msRel * 1e-3f * sr));
+    }
+    void reset() { env[0]=env[1]=0.0f; g[0]=g[1]=1.0f; }
+
+    inline float run(int c, float x, const Shaper &sh) {
+        const float m = std::fabs(x);
+        env[c] += (m > env[c] ? aAtk : aRel) * (m - env[c]);
+        const float e = env[c] > 1e-6f ? env[c] : 1e-6f;
+        const float target = sh.run(e) / e;        // the curve, as a GAIN
+        g[c] += (target < g[c] ? aAtk : aRel) * (target - g[c]);
+        return x * g[c];
     }
 };
 
@@ -362,10 +435,12 @@ struct DrumBuss {
         sr = (s > 1.0f) ? s : 44100.0f;
         comp.setSampleRate(sr);
         trans.setSampleRate(sr);
+        lim.setSampleRate(sr);
         applyAll();
     }
     void reset() {
-        comp.reset(); damp.reset(); boom.reset(); trans.reset(); emph.reset();
+        comp.reset(); damp.reset(); boom.reset(); trans.reset(); emph.reset(); lim.reset();
+        upL.reset(); upR.reset(); dnL.reset(); dnR.reset();
         bq1[0]=bq1[1]=bq2[0]=bq2[1]=bhp[0]=bhp[1]=0.0f;
     }
 
@@ -378,7 +453,10 @@ struct DrumBuss {
     Transients trans;
     Emphasis emph;
     Folder folder;
-    bool useFolder = true;      // `soft` only; med and hard keep their tables
+    Limiter lim;
+    Halfband upL, upR, dnL, dnR;
+    bool oversample = true;
+    int shapeMode = 0;          // 0 folder (soft), 1 limiter (med), 2 table (hard)
     // ⚠ OFF by default (0 dB = a no-op). §47: fitted against the four-carrier
     // data it moved the objective from 12.181 to 12.043 dB — i.e. nothing, and
     // the 12 dB baseline is the real problem. The mechanism is real and
@@ -422,10 +500,27 @@ struct DrumBuss {
         drive.select(p.driveType);
         drive.setDrive(p.drive);
         folder.setDrive(p.drive);
-        useFolder = (p.driveType == 0);
+        // soft = folder (§48). med and hard = tables.
+        // ⚠ med was tried as a LIMITER (§50) on the theory that a right curve
+        // with too many harmonics means smooth gain reduction rather than
+        // waveshaping — the tutorial calls it "limiting distortion". MEASURED
+        // AND REJECTED: 9.95 dB against the table's 4.16, degrading
+        // monotonically as release lengthens, i.e. the data wants LESS memory,
+        // not more. The Limiter struct is kept for the record but is not in the
+        // path.
+        shapeMode = (p.driveType == 0) ? 0 : 2;
         crunchShaper.selectCrunch();
         crunchShaper.setDrive(p.crunch);
         trans.set(p.trans);
+    }
+
+    // One sample through the shaping section: drive character, then Crunch.
+    inline float shape(int c, float x) {
+        if (shapeMode == 0)      x = folder.run(x);          // §48 soft folds
+        else if (emphDb != 0.0f) x = emph.post(c, drive.run(emph.pre(c, x)));
+        else                     x = drive.run(x);
+        if (p.crunch > 0.0f)     x = crunchShaper.run(x);
+        return x;
     }
 
     // Block processing. Order is the MEASURED one; see the header.
@@ -442,15 +537,21 @@ struct DrumBuss {
             float l = dl * p.trim, r = dr * p.trim;      // §13 Trim is PRE
             trans.run(l, r);                             // §34 upstream of sat
             if (p.comp) comp.run(l, r);                  // §23 upstream of dist
-            if (useFolder) {               // §48: soft is a folder, not a curve
-                l = folder.run(l); r = folder.run(r);
-            } else if (emphDb != 0.0f) {   // shelf -> shaper -> inverse shelf
-                l = emph.post(0, drive.run(emph.pre(0, l)));
-                r = emph.post(1, drive.run(emph.pre(1, r)));
+            // --- the shaping section, 2x oversampled (§51) -------------------
+            if (oversample) {
+                // up: zero-stuff, filter, x2 for the interpolation gain
+                upL.push(l); const float lA = 2.0f * upL.filt();
+                upL.push(0.0f); const float lB = 2.0f * upL.filt();
+                upR.push(r); const float rA = 2.0f * upR.filt();
+                upR.push(0.0f); const float rB = 2.0f * upR.filt();
+                // shape at 2x
+                dnL.push(shape(0, lA)); dnL.push(shape(0, lB));
+                dnR.push(shape(1, rA)); dnR.push(shape(1, rB));
+                // down: filter, take one of two
+                l = dnL.filt(); r = dnR.filt();
             } else {
-                l = drive.run(l); r = drive.run(r);
+                l = shape(0, l); r = shape(1, r);
             }
-            if (p.crunch > 0.0f) { l = crunchShaper.run(l); r = crunchShaper.run(r); }
             damp.run(l, r);                              // §24 after Crunch
             runBoom(l, r);
             l = dl + (l - dl) * mix;                     // Dry/Wet across the stage

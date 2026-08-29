@@ -954,3 +954,82 @@ happened here, and is worth knowing before anyone reads a flat median as "no pro
 2. **`soft`'s residual dip** — the topology is close but not exact.
 3. A validation pass that covers the parameter space evenly, alongside the stock presets, so
    improvements to under-represented stages are visible.
+
+---
+
+# PIVOT (2026-08-29, Josh): stop chasing 1:1, make it musical and cheap
+
+## 50. `med` as a limiter — hypothesis TESTED AND REJECTED
+
+`med`'s curve fits to 0.006–0.070 rms yet its harmonics are 4 dB high (§47). That combination
+suggests smooth gain reduction rather than waveshaping, and the tutorial calls the type "limiting
+distortion". Implemented as a limiter and fitted over attack × release:
+
+| attack | rel 3 ms | 8 | 15 | 30 | 60 |
+|---|---|---|---|---|---|
+| 0.15 ms | **9.95** | 21.93 | 30.89 | 40.69 | 48.45 |
+| 1.20 ms | 11.61 | 21.89 | 29.01 | 37.05 | 43.98 |
+
+**Best case 9.95 dB against the static table's 4.16**, degrading monotonically as release
+lengthens — the data wants *less* memory, not more. **Rejected.** `med` stays a table. The
+`Limiter` struct is kept for the record but is out of the signal path.
+
+## 51. CPU on the device — a non-issue
+
+Measured **on the Move**, not the Mac (an A72's transcendental costs are nothing like Apple
+Silicon's, and this module leans on log10, pow, sin, exp2 and tanh):
+
+| case | before oversampling | with 2× |
+|---|---|---|
+| bypass | 0.000% | 0.000% |
+| defaults | 0.161% | 0.349% |
+| + compress | 0.364% | 0.525% |
+| **everything on** | **0.788%** | **1.097%** |
+
+Under 1.1% of one core with every stage engaged. The per-sample transcendentals cost far less than
+suspected — worth having measured rather than optimised on suspicion.
+
+## 52. Aliasing — the real musicality problem, and it is fixed
+
+Pure tone in, everything that is NOT a harmonic of it measured out. At a **5 kHz** input the
+shapers put aliased content only 5–6 dB below the harmonics they are meant to make — the harshness
+you hear on hats and snare tops:
+
+| stage | no oversampling | 2× | improvement |
+|---|---|---|---|
+| soft 1.0 | −36.6 dB | **−49.9** | −13.3 |
+| med 1.0 | −17.3 dB | **−33.7** | −16.5 |
+| hard 1.0 | −16.2 dB | **−23.7** | −7.5 |
+| crunch 1.0 | −18.4 dB | **−24.0** | −5.5 |
+
+2× oversampling around the shaping section, halfband FIR. ⚠ The halfband's coefficients had to be
+**normalised** — unnormalised their DC gain was 0.98, costing 0.33 dB over the round trip, which
+would have surfaced later as a mysterious level error. Verified by a null test (+0.025 dB), not by
+inspection.
+
+## 53. ⚠ WE ARE NOW CLEANER THAN THE DEVICE — a decision, not a bug
+
+Ableton's own Drum Buss aliases, and substantially. Non-harmonic content in **Live's** render of
+`soft` at Drive 1.0, against carrier:
+
+| carrier | 100 Hz | 300 Hz | 1 kHz | **3 kHz** |
+|---|---|---|---|---|
+| Ableton | −57.6 dB | −46.4 | −52.4 | **−21.1** |
+
+It grows with carrier, which is the signature of aliasing rather than noise — and neutral at 3 kHz
+is clean at −62.0 dB, so it comes from the drive stage.
+
+**Ours at 3 kHz: −50.1 dB oversampled, −32.6 dB not.** So the module is now **29 dB cleaner than
+the device it models**.
+
+That is a genuine fork:
+- **Oversampling ON** (current): smoother, less harsh, better on a small speaker — but a
+  deliberate divergence from the reference, and Drum Buss's grit at high drive is part of its
+  character.
+- **OFF**: closer to the original, harsher, and 0.3% cheaper.
+
+Shipped **ON**, because the brief is a musical approximation rather than a 1:1 clone. Flipping it
+is one flag (`_os`), and the trade is recorded here so the choice stays visible.
+
+Validation after all of this: **median +0.91 dB level, 5.93 dB spectral** — marginally better than
+before, and unchanged in substance.
