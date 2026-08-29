@@ -15,7 +15,7 @@ from segments import SR, seg, db
 from analyse import read_wav, resolve_probe
 
 F0, F1, SWEEP_S = 20.0, 20000.0, 10.0
-LAG, POL = 58, -1.0
+LAG, POL = 55, 1.0
 
 
 def inverse_filter(x, f0=F0, f1=F1, seconds=SWEEP_S, sr=SR):

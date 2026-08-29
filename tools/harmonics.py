@@ -22,7 +22,7 @@ from filters import inverse_filter, deconvolve
 
 F0, F1, SWEEP_S = 20.0, 20000.0, 10.0
 L = SWEEP_S / math.log(F1 / F0)
-LAG, POL = 58, -1.0
+LAG, POL = 55, 1.0
 ORDERS = (2, 3, 4, 5)
 
 

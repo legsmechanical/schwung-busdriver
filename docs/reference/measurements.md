@@ -103,7 +103,7 @@ are in the `bursts` and `steps` segments, not yet extracted.
 Produced by `tools/measure.py rig/renders/campaign "rig/sets/campaign Project"`, full table in
 `rig/measurements.json`. Runs in ~4 s.
 
-## 8. 🔴 CONFIRMED: **Drum Buss INVERTS POLARITY**
+## 8. ~~CONFIRMED: Drum Buss INVERTS POLARITY~~ 🔴 **RETRACTED — see §30**
 
 Every cell correlates **negative** against the dry reference at its true lag; the bypassed dry
 track is bit-exact and positive, so the inversion is the device's. `DryWet = 0` gives exactly
@@ -500,3 +500,68 @@ small-signal gain as a proxy for the pre-gain, which is only valid if all of Dri
 pre-gain — the thing being tested. `campaign2`'s `sw100/sw300/sw1k/sw3k` settle it: if the fold is
 a memoryless pre-gain into a fixed shaper, the law is **identical at every carrier**. If it moves
 with frequency, there is filtering inside the fold and the model is wrong.
+
+---
+
+# 30. 🔴 RETRACTION: Drum Buss does **NOT** invert polarity
+
+**§8 was wrong.** Corrected 2026-08-28 with the campaign2 renders.
+
+**What I got wrong and how.** I derived the lag from an ENVELOPE correlation (unambiguous for the
+envelope, but uncertain by several samples) and then read the WAVEFORM's sign at that lag — on a
+**200 Hz carrier, where a 73-sample lag error flips the sign**. The envelope lag's uncertainty was
+larger than that, so the sign was effectively a coin toss. Fixing the tone ambiguity in one place
+and then re-introducing it in the next step is exactly the trap §8 was written to warn about.
+
+**What settles it**, three ways that agree:
+1. **Low-frequency correlation.** Over the 20–100 Hz head of the sweep, one period is ~880 samples
+   so a 73-sample error is 30°, nowhere near a sign flip. `drywet_0` — the device's own bypass —
+   gives **lag 184, g = +0.9993, residual −30.1 dB. POSITIVE.**
+2. **A 100 Hz carrier.** campaign2's `sw100` gives a **positive** transfer curve at the tightest
+   width yet measured (**0.037**), with a ±200 lag search that is under one period and therefore
+   cannot alias.
+3. Every cell agrees; nothing is cell-specific.
+
+**What the apparent inversion actually was:** the device's latency plus its filtering give a phase
+near 180° *at 300 Hz specifically*. Phase is not polarity. At 100 Hz the same device reads
+positive.
+
+## 31. Consequences — what else this corrects
+
+**(a) The "phase-dependent spread" in §27 was mostly MY MISALIGNMENT, not the device.**
+Re-aligned, `neutral`'s curve width drops **0.383 → 0.051**, 7.5× tighter. So the device at
+neutral is very nearly memoryless, which is what it should be.
+
+**(b) The transfer curves in §26/§27 are phase-contaminated** and their exact values should not be
+used. Extracted correctly at 100 Hz:
+
+| input | 0.10 | 0.30 | 0.50 | 0.70 | 0.90 | 1.00 | width |
+|---|---|---|---|---|---|---|---|
+| neutral | 0.166 | 0.479 | 0.738 | 0.916 | 0.996 | 1.000 | **0.037** |
+| soft 0.25 | 0.194 | 0.537 | 0.793 | 0.949 | 1.000 | 1.000 | 0.093 |
+| soft 0.50 | 0.297 | 0.695 | 0.860 | 0.939 | 0.995 | 1.000 | 0.262 |
+| soft 0.625 | 0.299 | 0.660 | 0.779 | 0.856 | 0.965 | 1.000 | 0.411 |
+| soft 0.75 | 0.309 | 0.643 | 0.715 | 0.777 | 0.917 | 0.979 | 0.552 |
+| soft 0.875 | 0.323 | 0.635 | 0.670 | 0.714 | 0.869 | 0.934 | 0.669 |
+| soft 1.00 | 0.338 | 0.633 | **0.640** | **0.670** | 0.830 | 0.885 | 0.756 |
+
+The curve **flattens through the middle** as Drive rises rather than folding back to 0.29 — that
+dramatic turnover was the 300 Hz phase error. The width still climbs to 0.756, so `soft` at high
+drive is genuinely not a static function; it is just less violent than §27 implied.
+
+**(c) What SURVIVES unchanged.** Anything measured spectrally, because **a spectrum does not depend
+on alignment at all**:
+- **`soft` is a wavefolder** (§26) — H3 exceeding H1 by 25.6 dB at Drive 1.0 stands.
+- All harmonic-order results (§22), including med's slight asymmetry.
+- **Comp is upstream of the distortion** (§23) and **Damp follows Crunch** (§24) — both are
+  harmonic-RATIO arguments.
+- Damp's response and corner law (§19), Boom's shape (§20), Crunch's linear response (§21).
+- The compressor's static curve (§17) — levels, not phase.
+- The Transients onset/tail table (§25) — envelope magnitudes.
+
+## 32. Method rule added
+
+⭑ **Extract transfer curves at a LOW carrier (100 Hz), and make the lag search span less than one
+period.** At 1 kHz and 3 kHz the same search returned aliased lags (one railed at the −200 limit)
+and negative-valued curves. A low carrier makes the phase error small and the search unambiguous
+in one move.

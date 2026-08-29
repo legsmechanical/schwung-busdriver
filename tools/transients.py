@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from segments import SR, seg, db
 from analyse import read_wav, resolve_probe
 
-LAG, POL = 58, -1.0
+LAG, POL = 55, 1.0
 BPM, PEAK = 120.0, 0.25
 
 
