@@ -207,3 +207,62 @@ clipper, i.e. **Comp before Drive**. Suggestive, not yet conclusive; needs the b
 - Transients changes the small-signal slope monotonically (1.075 / 1.227 / 1.372 / **1.505** /
   1.653 / 1.840 for −1 … +0.5) **on a steady swept tone**, which is not obviously "transient"
   behaviour and is worth understanding.
+
+---
+
+# The compressor (2026-08-28)
+
+`tools/dynamics.py`, from the `bursts` and `steps` segments.
+
+## 17. CONFIRMED: the static curve
+
+Output-minus-input gain per burst, at the steady part of each level. `neutral` is the device with
+the compressor OFF, so subtracting it isolates the compressor from the always-on saturation.
+
+| in (dBFS) | neutral | comp_on | **compressor alone** |
+|---|---|---|---|
+| −60 | +4.91 | +14.84 | 0 (reference) |
+| −48 | +4.90 | +15.93 | +1.10 |
+| −36 | +4.90 | +16.01 | +1.18 |
+| −30 | +4.90 | +15.97 | +1.14 |
+| −24 | +4.88 | +15.79 | +0.98 |
+| −18 | +4.83 | +14.04 | **−0.72** |
+| −12 | +4.61 | +9.69 | −4.85 |
+| −6 | +3.78 | +5.11 | −8.60 |
+| −3 | +2.78 | +2.73 | −9.98 |
+| 0 | +1.10 | +0.26 | **−10.77** |
+
+**Readings:**
+- **Makeup ≈ +11 dB**, fixed (the +14.84 at −60 dBFS against neutral's +4.91).
+- **Threshold ≈ −20 dBFS** — gain reduction crosses zero between −24 and −18.
+- **Ratio ≈ 4.3:1** over −18 → 0 dBFS (18 dB in, 4.22 dB out), steepening to ≈6:1 over the
+  top 12 dB. A soft knee, not a hard one.
+- **Maximum GR ≈ −10.8 dB** at full scale, from the compressor alone.
+- ⭑ There is a **slight rise (+1.1 to +1.2 dB) between −48 and −24 dBFS** before compression
+  starts. Small but consistent across four levels — worth explaining rather than smoothing over.
+
+**The always-on saturation, separately** (`neutral` column): flat +4.90 dB from −60 up to −24,
+then a soft knee — −0.30 dB at −12, −1.13 at −6, −2.13 at −3, **−3.81 dB at 0 dBFS**.
+
+## 18. 🔴 NOT ESTABLISHED: attack and release times
+
+**No number is reported, because none of them converged.**
+
+The first pass gave attack 3.3 ms / release 1.7 ms. A window-sensitivity check killed it: with a
+**centred** envelope (`np.convolve(..., 'same')`), `neutral` — a memoryless saturator with no time
+constant at all — read 3.9 ms, which was purely the 256-sample window. Narrowing to ≤64 samples
+made `neutral` read 0.00 ms (correct) and `comp_on` read a stable 0.54–0.59 ms across four
+windows, which *looked* like convergence.
+
+It was not. A centred window **leaks post-step samples backward across the step**, which makes a
+slow release read as instantaneous. With a **causal** trailing envelope nothing converges:
+`comp_on` attack ranges 0.18 → 6.08 ms and is NaN at one window.
+
+**Why the probe is the limit:** the `steps` segment's carrier is **200 Hz = 5.0 ms per cycle**, so
+no envelope method can resolve anything faster than that. The device's attack is plainly below it.
+
+**Fix (needs one new export):** a `steps` probe with a **2 kHz carrier** (0.5 ms/cycle) or a
+band-limited noise burst, giving ~10x the resolution. Cheap to add to the next Set.
+
+⚠ **Method note worth keeping:** run a window-sensitivity sweep before believing any envelope-
+derived time constant. If the answer moves with the window, the window is the answer.
