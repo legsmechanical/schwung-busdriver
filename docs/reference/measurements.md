@@ -714,3 +714,39 @@ drive, hard's bends *up* — which is why hard reaches clipping so much faster a
 - **Boom's Q and decay law** — campaign3's `hits` segment is rendered and not yet analysed.
 - **Transients' law** — the denser ladder is rendered and not yet analysed.
 - **The +1.1 dB pre-compression rise** (§36) — real, unexplained, unmodelled.
+
+## 40. Boom's decay law
+
+Sub-band (<150 Hz) envelope after a hit, dB relative to the same point with Boom off:
+
+| BoomDecay | 20 ms | 50 ms | 100 ms | 150 ms |
+|---|---|---|---|---|
+| 0.00 | +5.03 | −12.26 | −15.62 | −17.24 |
+| 0.25 | +5.60 | −11.85 | −14.85 | −16.18 |
+| 0.50 | +6.18 | −11.20 | −11.78 | −7.74 |
+| 0.75 | +6.77 | −10.33 | −7.33 | −0.73 |
+| 1.00 | +7.35 | −9.23 | −2.74 | **+4.89** |
+
+**The onset barely moves** (+5.0 → +7.4 dB across the whole control) while the **tail spans 22 dB
+at 150 ms**. So Decay sets the resonance's ring time and not its level — which is what it should
+do, and it is why steady-state measurement (§12) saw almost nothing.
+
+⚠ Values past ~200 ms are contaminated by the next hit (hits land every 250 ms at 120 BPM), and
+the resonance's own 20 ms period still ripples the envelope. Use ≤150 ms for fitting.
+
+## 41. Transients — the law, denser
+
+| Transients | onset | tail |
+|---|---|---|
+| −0.75 | +0.22 | −1.99 |
+| −0.50 | +0.26 | −1.39 |
+| −0.25 | +0.20 | −0.62 |
+| 0 | 0 | 0 |
+| +0.25 | +0.83 | +0.62 |
+| +0.50 | +1.81 | +1.32 |
+| +0.75 | +2.93 | +2.10 |
+
+Confirms §25 with more points and sharpens it: on the **negative** side the onset is flat within
+0.3 dB while the tail falls — a pure gate. On the **positive** side both rise, onset-weighted.
+⭑ The law is strongly nonlinear near the top: +0.75 gives +2.93 dB of onset where +1.0 gave
+**+8.02** (§25), so most of the control's range lives in its last quarter.

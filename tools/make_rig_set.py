@@ -453,7 +453,7 @@ def main():
     if os.path.exists(pm):
         with open(pm) as f:
             pmj = json.load(f)
-        for key in ('suite', 'suite2', 'suite3'):   # any suite the probe manifest defines
+        for key in ('suite', 'suite2', 'suite3', 'suite4'):   # any suite the probe manifest defines
             if pmj.get(key, {}).get('file') == os.path.basename(a.probe):
                 manifest['suite'] = pmj[key]
 

@@ -149,8 +149,10 @@ def resolve_probe(renders_dir, project_dir):
             f'   renders  {newest_render:.0f}\n'
             f'   Re-export from the current Set before analysing.')
 
+    # stderr: this is diagnostic, and it must not land in anything that
+    # captures stdout — it contaminated a generated C header once.
     print(f'provenance OK — probe {man["probe"]["file"]} sha256 {got[:16]}… '
-          f'read from the rendered project')
+          f'read from the rendered project', file=sys.stderr)
     return probe, man
 
 

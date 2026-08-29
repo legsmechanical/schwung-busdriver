@@ -1,10 +1,11 @@
 /* busdriver_module.cpp — Bus Driver, a Schwung audio_fx module.
  *
- * The glue stage from schwung-dr32, peeled off so it can sit on any track
- * rather than only over a kit. The DSP is dsp/busdriver.h, lifted whole; this
- * file is only the host contract: audio_fx v2, stereo interleaved int16
- * in-place at 44100 Hz, stringly set_param/get_param, and a state blob so a
- * slot survives a reboot.
+ * A model of Ableton Live 12's Drum Buss, built from measurement rather than
+ * from its documentation. Every law is cited to a section of
+ * docs/reference/measurements.md at the point of use in dsp/drumbuss.h.
+ *
+ * This file is only the host contract: audio_fx v2, stereo interleaved int16
+ * in-place at 44100 Hz, stringly set_param/get_param, and a state blob.
  *
  * MIT licensed (see LICENSE).
  */
@@ -15,153 +16,122 @@
 #include <new>
 
 #include "../shared/audio_fx_api_v2.h"
-#include "../dsp/busdriver.h"
+#include "../dsp/drumbuss.h"
 
-#define BD_SAMPLE_RATE   44100.0f
-/* The host runs 128-frame blocks; the stage is block-based, so anything larger
- * is chunked rather than assumed. */
-#define BD_MAX_BLOCK     512
+#define BD_SAMPLE_RATE 44100.0f
+#define BD_MAX_BLOCK   512
 
 static const host_api_v1_t *g_host = nullptr;
-
-static void bd_log(const char *msg) {
-    if (g_host && g_host->log) g_host->log(msg);
-}
-
-/* ---- parameters -----------------------------------------------------------
- *
- * Compress / Crunch are 0..1. Attack / Sustain are BIPOLAR -1..+1 with 0
- * neutral — the stage itself takes them that way and re-centres internally.
- * Mix is a dry/wet blend over the whole stage (so it is parallel compression,
- * not a bypass fader). Output is a trim in dB, applied last.
- */
-struct params_t {
-    float compress = 0.0f;
-    float crunch   = 0.0f;
-    float attack   = 0.0f;   /* -1..+1 */
-    float sustain  = 0.0f;   /* -1..+1 */
-    float mix      = 1.0f;
-    float outputDb = 0.0f;   /* -24..+12 */
-};
+static void bd_log(const char *m) { if (g_host && g_host->log) g_host->log(m); }
 
 struct bd_t {
-    busdriver::DrumBuss bus;
-    params_t p;
-    bool  neutral = true;    /* every stage control at rest */
-    float mix     = 1.0f;
-    float scratchL[BD_MAX_BLOCK];
-    float scratchR[BD_MAX_BLOCK];
-    float wet[BD_MAX_BLOCK * 2];
-    float dry[BD_MAX_BLOCK * 2];
+    drumbuss::DrumBuss d;
+    float buf[BD_MAX_BLOCK * 2];
 };
 
 static float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-/* Push the param set into the stage and recompute the bypass flag.
- *
- * The tolerances match the stage's own atkOn/susOn gates (+-0.005 about
- * centre); a control inside its own dead zone must also read as neutral here,
- * or the module would run a stage that has been told to do nothing. */
-static void bd_apply(bd_t *I) {
-    params_t &p = I->p;
-    I->bus.setParams(p.compress, p.crunch,
-                     0.5f + 0.5f * p.attack, 0.5f + 0.5f * p.sustain);
-    I->bus.outGain = powf(10.0f, p.outputDb / 20.0f);
-    I->mix = clampf(p.mix, 0.0f, 1.0f);
-    I->neutral = (p.compress <= 0.001f) && (p.crunch <= 0.001f) &&
-                 (fabsf(p.attack) <= 0.005f) && (fabsf(p.sustain) <= 0.005f);
+/* Ranges are Live's own, read out of its stock .adv presets (measurements §1).
+ * Trim and Output are LINEAR gains there, not dB, so they are exposed here in
+ * dB for a usable control and converted on the way in. */
+struct field_t { const char *key; float lo, hi; };
+static const field_t kFields[] = {
+    { "comp",       0.0f,     1.0f },      /* a TOGGLE — Live's is a bool */
+    { "drive",      0.0f,     1.0f },
+    { "drive_type", 0.0f,     2.0f },      /* 0 soft (a folder), 1 med, 2 hard */
+    { "crunch",     0.0f,     1.0f },
+    { "damp",     500.0f, 20000.0f },      /* Hz, and it IS the -3 dB corner */
+    { "transients",-1.0f,     1.0f },
+    { "boom",       0.0f,     1.0f },
+    { "boom_freq", 30.0f,    90.0f },      /* Hz */
+    { "boom_decay", 0.0f,     1.0f },
+    { "trim",     -70.0f,     0.0f },      /* dB */
+    { "output",   -40.0f,     3.0f },      /* dB */
+    { "drywet",     0.0f,     1.0f },
+    { nullptr, 0.0f, 0.0f }
+};
+
+static float *slot(bd_t *I, const char *key) {
+    drumbuss::Params &p = I->d.p;
+    static float scratch;
+    if (!strcmp(key, "comp"))       { scratch = p.comp ? 1.0f : 0.0f; return &scratch; }
+    if (!strcmp(key, "drive"))       return &p.drive;
+    if (!strcmp(key, "crunch"))      return &p.crunch;
+    if (!strcmp(key, "damp"))        return &p.dampHz;
+    if (!strcmp(key, "transients"))  return &p.trans;
+    if (!strcmp(key, "boom"))        return &p.boom;
+    if (!strcmp(key, "boom_freq"))   return &p.boomHz;
+    if (!strcmp(key, "boom_decay"))  return &p.boomDecay;
+    if (!strcmp(key, "drywet"))      return &p.dryWet;
+    return nullptr;
 }
 
-/* ---- lifecycle ---- */
-static void *bd_create(const char *module_dir, const char *config_json) {
-    (void)module_dir; (void)config_json;
+static void bd_set(bd_t *I, const char *key, float v) {
+    drumbuss::Params &p = I->d.p;
+    if (!strcmp(key, "comp"))            p.comp = v >= 0.5f;
+    else if (!strcmp(key, "drive_type")) p.driveType = (int)lrintf(clampf(v, 0, 2));
+    else if (!strcmp(key, "trim"))       p.trim    = powf(10.0f, clampf(v, -70, 0) / 20.0f);
+    else if (!strcmp(key, "output"))     p.outGain = powf(10.0f, clampf(v, -40, 3) / 20.0f);
+    else {
+        float *s = slot(I, key);
+        if (!s) return;
+        for (const field_t *f = kFields; f->key; f++)
+            if (!strcmp(f->key, key)) { *s = clampf(v, f->lo, f->hi); break; }
+    }
+    I->d.applyAll();
+}
+
+static float bd_get(bd_t *I, const char *key, bool *ok) {
+    drumbuss::Params &p = I->d.p;
+    *ok = true;
+    if (!strcmp(key, "comp"))       return p.comp ? 1.0f : 0.0f;
+    if (!strcmp(key, "drive_type")) return (float)p.driveType;
+    if (!strcmp(key, "trim"))       return 20.0f * log10f(p.trim   > 1e-6f ? p.trim   : 1e-6f);
+    if (!strcmp(key, "output"))     return 20.0f * log10f(p.outGain> 1e-6f ? p.outGain: 1e-6f);
+    float *s = slot(I, key);
+    if (s) return *s;
+    *ok = false;
+    return 0.0f;
+}
+
+static void *bd_create(const char *dir, const char *cfg) {
+    (void)dir; (void)cfg;
     bd_t *I = new (std::nothrow) bd_t();
     if (!I) return nullptr;
-    I->bus.setSampleRate(BD_SAMPLE_RATE);
-    I->bus.reset();
-    bd_apply(I);
+    I->d.setSampleRate(BD_SAMPLE_RATE);
+    I->d.reset();
     bd_log("Bus Driver: instance created");
     return I;
 }
-
 static void bd_destroy(void *inst) { delete (bd_t *)inst; }
 
-/* ---- audio ----------------------------------------------------------------
- *
- * Bypassed entirely while neutral — actually skipped, not "runs and does
- * nothing" — so an untouched Bus Driver is bit-transparent and costs one bool
- * test per block. That is also why the int16 round-trip below is not taken in
- * the neutral case: converting to float and back is not free of error, and a
- * transparent stage should be transparent to the sample.
- */
 static void bd_process(void *inst, int16_t *audio, int frames) {
     bd_t *I = (bd_t *)inst;
     if (!I || frames <= 0) return;
-
-    const float outGain = I->bus.outGain;
-    if (I->neutral) {
-        /* Output trim still applies: it is a level control, not part of the
-         * glue, and someone may want only that. */
-        if (outGain == 1.0f) return;
-        for (int i = 0; i < frames * 2; i++) {
-            float v = (audio[i] / 32768.0f) * outGain;
-            v = clampf(v, -1.0f, 1.0f);
-            audio[i] = (int16_t)lrintf(v * 32767.0f);
-        }
-        return;
-    }
-
+    /* Bypass BEFORE the int16 round trip. The DSP's own neutral() check happens
+     * after conversion, and float->int16 is not the identity, so a neutral
+     * device would otherwise not be bit-transparent. */
+    if (I->d.neutral() && I->d.p.outGain == 1.0f) return;
     for (int off = 0; off < frames; off += BD_MAX_BLOCK) {
         const int n = (frames - off > BD_MAX_BLOCK) ? BD_MAX_BLOCK : (frames - off);
         int16_t *blk = audio + off * 2;
-
-        for (int i = 0; i < n * 2; i++) I->wet[i] = blk[i] / 32768.0f;
-
-        /* Parallel path: only keep the unprocessed copy when it is going to be
-         * blended back in. At mix = 1 this is a plain in-place run. */
-        const float mix = I->mix;
-        if (mix < 0.999f) memcpy(I->dry, I->wet, sizeof(float) * 2 * (size_t)n);
-
-        I->bus.processBlock(I->wet, n, I->scratchL, I->scratchR);
-
-        if (mix < 0.999f) {
-            for (int i = 0; i < n * 2; i++)
-                I->wet[i] = I->dry[i] + (I->wet[i] - I->dry[i]) * mix;
-        }
-
+        for (int i = 0; i < n * 2; i++) I->buf[i] = blk[i] / 32768.0f;
+        I->d.process(I->buf, n);
         for (int i = 0; i < n * 2; i++) {
-            float v = clampf(I->wet[i], -1.0f, 1.0f);
+            float v = clampf(I->buf[i], -1.0f, 1.0f);
             blk[i] = (int16_t)lrintf(v * 32767.0f);
         }
     }
 }
 
-/* ---- params ---- */
-struct field_t { const char *key; float *slot; float lo, hi; };
-
-static field_t *bd_fields(bd_t *I, field_t *tbl) {
-    params_t &p = I->p;
-    tbl[0] = { "compress", &p.compress,  0.0f,  1.0f };
-    tbl[1] = { "crunch",   &p.crunch,    0.0f,  1.0f };
-    tbl[2] = { "attack",   &p.attack,   -1.0f,  1.0f };
-    tbl[3] = { "sustain",  &p.sustain,  -1.0f,  1.0f };
-    tbl[4] = { "mix",      &p.mix,       0.0f,  1.0f };
-    tbl[5] = { "output",   &p.outputDb, -24.0f, 12.0f };
-    tbl[6] = { nullptr,    nullptr,      0.0f,  0.0f };
-    return tbl;
-}
-
-/* The state blob is the same key=value list the host sets, so a preset written
- * by one build reads on the next even if a param is added: unknown keys are
- * ignored and missing ones keep their default. */
 static int bd_write_state(bd_t *I, char *buf, int n) {
-    field_t tbl[8]; bd_fields(I, tbl);
     int off = 0;
-    for (int i = 0; tbl[i].key; i++) {
+    for (const field_t *f = kFields; f->key; f++) {
+        bool ok; float v = bd_get(I, f->key, &ok);
         int w = snprintf(buf + off, (size_t)(n - off), "%s%s=%.6f",
-                         i ? ";" : "", tbl[i].key, (double)*tbl[i].slot);
+                         off ? ";" : "", f->key, (double)v);
         if (w < 0 || w >= n - off) return -1;
         off += w;
     }
@@ -169,75 +139,51 @@ static int bd_write_state(bd_t *I, char *buf, int n) {
 }
 
 static void bd_read_state(bd_t *I, const char *val) {
-    field_t tbl[8]; bd_fields(I, tbl);
     const char *s = val;
     while (s && *s) {
-        const char *eq = strchr(s, '=');
-        const char *semi = strchr(s, ';');
+        const char *eq = strchr(s, '='), *semi = strchr(s, ';');
         if (!eq || (semi && eq > semi)) { if (!semi) break; s = semi + 1; continue; }
-        const size_t klen = (size_t)(eq - s);
-        for (int i = 0; tbl[i].key; i++) {
-            if (strlen(tbl[i].key) == klen && strncmp(s, tbl[i].key, klen) == 0) {
-                *tbl[i].slot = clampf((float)atof(eq + 1), tbl[i].lo, tbl[i].hi);
-                break;
-            }
+        char key[32];
+        size_t klen = (size_t)(eq - s);
+        if (klen < sizeof key) {
+            memcpy(key, s, klen); key[klen] = 0;
+            bd_set(I, key, (float)atof(eq + 1));
         }
         if (!semi) break;
         s = semi + 1;
     }
-    bd_apply(I);
 }
 
 static void bd_set_param(void *inst, const char *key, const char *val) {
     bd_t *I = (bd_t *)inst;
     if (!I || !key || !val) return;
-
-    if (strcmp(key, "state") == 0) { bd_read_state(I, val); return; }
-
-    field_t tbl[8]; bd_fields(I, tbl);
-    for (int i = 0; tbl[i].key; i++) {
-        if (strcmp(key, tbl[i].key) == 0) {
-            *tbl[i].slot = clampf((float)atof(val), tbl[i].lo, tbl[i].hi);
-            bd_apply(I);
-            return;
-        }
-    }
+    if (!strcmp(key, "state")) { bd_read_state(I, val); return; }
+    bd_set(I, key, (float)atof(val));
 }
 
-/* Readback for every key the UI displays. Without it every knob reads zero and
- * edits appear to do nothing. */
 static int bd_get_param(void *inst, const char *key, char *buf, int n) {
     bd_t *I = (bd_t *)inst;
     if (!I || !key || !buf || n <= 0) return -1;
-
-    if (strcmp(key, "state") == 0) return bd_write_state(I, buf, n);
-
-    field_t tbl[8]; bd_fields(I, tbl);
-    for (int i = 0; tbl[i].key; i++) {
-        if (strcmp(key, tbl[i].key) == 0) {
-            int w = snprintf(buf, (size_t)n, "%.6f", (double)*tbl[i].slot);
-            return (w > 0 && w < n) ? w : -1;
-        }
-    }
-    return -1;
+    if (!strcmp(key, "state")) return bd_write_state(I, buf, n);
+    bool ok; float v = bd_get(I, key, &ok);
+    if (!ok) return -1;
+    int w = snprintf(buf, (size_t)n, "%.6f", (double)v);
+    return (w > 0 && w < n) ? w : -1;
 }
 
-/* ---- entry point ---- */
 static audio_fx_api_v2_t g_api;
 extern "C" {
-
 audio_fx_api_v2_t *move_audio_fx_init_v2(const host_api_v1_t *host) {
     g_host = host;
-    memset(&g_api, 0, sizeof(g_api));
+    memset(&g_api, 0, sizeof g_api);
     g_api.api_version      = AUDIO_FX_API_VERSION_2;
     g_api.create_instance  = bd_create;
     g_api.destroy_instance = bd_destroy;
     g_api.process_block    = bd_process;
     g_api.set_param        = bd_set_param;
     g_api.get_param        = bd_get_param;
-    g_api.on_midi          = nullptr;   /* no MIDI surface */
+    g_api.on_midi          = nullptr;
     bd_log("Bus Driver initialized");
     return &g_api;
 }
-
-} /* extern "C" */
+}

@@ -2,10 +2,10 @@
   "id": "busdriver",
   "name": "Bus Driver",
   "abbrev": "DRVR",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "legsmechanical",
   "license": "MIT",
-  "description": "Drum-bus glue: one-knob compression that only ever attenuates, a spectrum-neutral saturator, and orthogonal attack/sustain shaping.",
+  "description": "Drum-bus glue modelled from measurement: one-knob compression, three drive characters, band-limited crunch, damping, and a tuned sub generator.",
   "dsp": "busdriver.so",
   "api_version": 2,
   "capabilities": {
@@ -13,12 +13,18 @@
     "component_type": "audio_fx",
     "audio_in": true,
     "chain_params": [
-      { "key": "compress", "name": "Compress", "type": "float", "min": 0.0,   "max": 1.0,  "step": 0.01, "default": 0.0 },
-      { "key": "crunch",   "name": "Crunch",   "type": "float", "min": 0.0,   "max": 1.0,  "step": 0.01, "default": 0.0 },
-      { "key": "attack",   "name": "Attack",   "type": "float", "min": -1.0,  "max": 1.0,  "step": 0.02, "default": 0.0 },
-      { "key": "sustain",  "name": "Sustain",  "type": "float", "min": -1.0,  "max": 1.0,  "step": 0.02, "default": 0.0 },
-      { "key": "mix",      "name": "Dry/Wet",  "type": "float", "min": 0.0,   "max": 1.0,  "step": 0.01, "default": 1.0 },
-      { "key": "output",   "name": "Output",   "type": "float", "min": -24.0, "max": 12.0, "step": 0.5,  "default": 0.0, "unit": "dB" }
+      { "key": "drive",      "name": "Drive",      "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "drive_type", "name": "Character",  "type": "enum",  "options": ["Soft", "Medium", "Hard"], "default": "Soft" },
+      { "key": "crunch",     "name": "Crunch",     "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "damp",       "name": "Damp",       "type": "float", "min": 500.0,  "max": 20000.0, "step": 100.0, "default": 20000.0, "unit": "Hz" },
+      { "key": "transients", "name": "Transients", "type": "float", "min": -1.0,   "max": 1.0,     "step": 0.02, "default": 0.0 },
+      { "key": "comp",       "name": "Compress",   "type": "float", "min": 0.0,    "max": 1.0,     "step": 1.0,  "default": 0.0 },
+      { "key": "boom",       "name": "Boom",       "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "boom_freq",  "name": "Boom Freq",  "type": "float", "min": 30.0,   "max": 90.0,    "step": 0.5,  "default": 50.0, "unit": "Hz" },
+      { "key": "boom_decay", "name": "Boom Decay", "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 },
+      { "key": "trim",       "name": "Trim",       "type": "float", "min": -70.0,  "max": 0.0,     "step": 0.5,  "default": 0.0, "unit": "dB" },
+      { "key": "drywet",     "name": "Dry/Wet",    "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 },
+      { "key": "output",     "name": "Output",     "type": "float", "min": -40.0,  "max": 3.0,     "step": 0.5,  "default": 0.0, "unit": "dB" }
     ]
   }
 }

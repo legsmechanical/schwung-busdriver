@@ -24,6 +24,7 @@
 #pragma once
 #include <cmath>
 #include <cstring>
+#include "../src/shapers.h"
 
 namespace drumbuss {
 
@@ -118,6 +119,115 @@ struct Comp {
     }
 };
 
+// ---------------------------------------------------------------- shapers
+//
+// §37: med, hard and Crunch each reduce to ONE fixed shaper plus a pre-gain
+// (residuals 0.0008-0.07). `soft` does not — it FOLDS, and a monotonic shape
+// cannot be scaled into a fold (§29). So all four are stored as the MEASURED
+// curves at their measured settings and interpolated, which removes the fit
+// residual for the three that fit and is an honest approximation for the one
+// that does not.
+//
+// ⚠ `soft`'s per-bin width reaches 0.754, i.e. at high drive it is not a static
+// function of its input at all. The table is an average over that spread. Its
+// exact topology is unknown and NOT guessed at here.
+//
+// Curves are odd by measurement (§22: evens 18-20 dB below odds), so only the
+// positive half is stored and the sign is carried through.
+struct Shaper {
+    const float (*curve)[kShaperN] = nullptr;
+    const float *drives = nullptr;
+    int steps = 0;
+    int i0 = 0, i1 = 0;
+    float mix = 0.0f;
+
+    void select(int type) {
+        switch (type) {
+            case 1:  curve = kMedCurve;  drives = kMedDrive;  steps = kMedSteps;  break;
+            case 2:  curve = kHardCurve; drives = kHardDrive; steps = kHardSteps; break;
+            default: curve = kSoftCurve; drives = kSoftDrive; steps = kSoftSteps; break;
+        }
+    }
+    void selectCrunch() {
+        curve = kCrunchCurve; drives = kCrunchDrive; steps = kCrunchSteps;
+    }
+    void setDrive(float d) {
+        if (!steps) return;
+        i0 = 0;
+        while (i0 < steps - 2 && drives[i0 + 1] < d) i0++;
+        i1 = i0 + 1;
+        const float span = drives[i1] - drives[i0];
+        mix = (span > 1e-9f) ? (d - drives[i0]) / span : 0.0f;
+        mix = mix < 0.0f ? 0.0f : (mix > 1.0f ? 1.0f : mix);
+    }
+    inline float run(float x) const {
+        if (!steps) return x;
+        const float a = x < 0.0f ? -x : x;
+        const float u = a > 1.0f ? 1.0f : a;
+        const float f = u * (kShaperN - 1);
+        int k = (int)f;
+        if (k > kShaperN - 2) k = kShaperN - 2;
+        const float t = f - k;
+        const float v0 = curve[i0][k] + t * (curve[i0][k + 1] - curve[i0][k]);
+        const float v1 = curve[i1][k] + t * (curve[i1][k + 1] - curve[i1][k]);
+        const float y = v0 + mix * (v1 - v0);
+        return x < 0.0f ? -y : y;
+    }
+};
+
+// ---------------------------------------------------------------- Transients
+//
+// §41 measured law, ASYMMETRIC BY SIGN. Negative is a gate — the onset stays
+// flat within 0.3 dB while the tail falls (-1.99 dB at -0.75). Positive raises
+// BOTH, onset-weighted (+2.93 / +2.10 at +0.75), and is strongly nonlinear near
+// the top: +1.0 reaches +8.02 dB of onset (§25), so most of the range lives in
+// the last quarter.
+//
+// §34: it sits UPSTREAM of the saturation — a 23 dB monotonic span in H3 with
+// no Drive at all, which is only possible if it changes what the saturation
+// sees.
+struct Transients {
+    float aF = 0.0f, rF = 0.0f, aS = 0.0f, rS = 0.0f;
+    float envF[2] = {0, 0}, envS[2] = {0, 0};
+    float up = 0.0f, dn = 0.0f;
+
+    void setSampleRate(float sr) {
+        aF = 1.0f - std::exp(-1.0f / (0.0005f * sr));   // 0.5 ms
+        rF = 1.0f - std::exp(-1.0f / (0.050f * sr));    // 50 ms
+        aS = 1.0f - std::exp(-1.0f / (0.001f * sr));    // 1 ms, shared attack
+        rS = 1.0f - std::exp(-1.0f / (0.400f * sr));    // 400 ms
+    }
+    void reset() { envF[0] = envF[1] = envS[0] = envS[1] = 0.0f; }
+    void set(float t) {
+        // The two sides are separate laws because the measurement says they are.
+        // Exponents chosen so +0.75 -> +2.93 dB and +1.0 -> +8.02 dB of onset,
+        // and -0.75 -> -1.99 dB of tail with the onset flat.
+        up = (t > 0.0f) ? std::pow(t, 3.2f) * 2.75f : 0.0f;
+        dn = (t < 0.0f) ? (-t) * 0.62f : 0.0f;
+    }
+    inline void run(float &l, float &r) {
+        float *ch[2] = {&l, &r};
+        for (int c = 0; c < 2; c++) {
+            const float m = std::fabs(*ch[c]);
+            envF[c] += (m > envF[c] ? aF : rF) * (m - envF[c]);
+            envS[c] += (m > envS[c] ? aS : rS) * (m - envS[c]);
+            float g = 1.0f;
+            if (up > 0.0f) {                       // onset-weighted boost
+                float t = (envF[c] - envS[c]) / (envF[c] + 1e-6f);
+                if (t < 0.0f) t = 0.0f;
+                g *= std::exp2(up * t);
+            }
+            if (dn > 0.0f) {                       // gate: tail only
+                float t = (envS[c] - envF[c]) / (envF[c] + 1e-5f);
+                if (t < 0.0f) t = 0.0f;
+                if (t > 3.0f) t = 3.0f;
+                g *= std::exp2(-dn * t);
+            }
+            *ch[c] *= g;
+        }
+    }
+};
+
 // ---------------------------------------------------------------- Boom
 //
 // §20: NOT a shelf. A resonant peak at BoomFrequency PLUS a high-pass that
@@ -156,13 +266,84 @@ struct DrumBuss {
     void setSampleRate(float s) {
         sr = (s > 1.0f) ? s : 44100.0f;
         comp.setSampleRate(sr);
-        apply();
+        trans.setSampleRate(sr);
+        applyAll();
     }
-    void reset() { comp.reset(); damp.reset(); boom.reset(); }
+    void reset() {
+        comp.reset(); damp.reset(); boom.reset(); trans.reset();
+        bq1[0]=bq1[1]=bq2[0]=bq2[1]=bhp[0]=bhp[1]=0.0f;
+    }
 
     void apply() {
         damp.set(p.dampHz, sr);
         boom.set(p.boomHz, p.boom, p.boomDecay, sr);
+    }
+
+    Shaper drive, crunchShaper;
+    Transients trans;
+
+    // §38 pre-gain laws, quadratic in Drive, fitted to under 0.1 dB rms.
+    static float medGainDb(float d)    { return -3.162f*d*d + 15.003f*d - 1.931f; }
+    static float hardGainDb(float d)   { return  7.768f*d*d +  4.984f*d - 0.779f; }
+    static float crunchGainDb(float d) { return -1.015f*d*d +  7.832f*d - 1.896f; }
+
+    // §20: Boom's high-pass TRACKS the tuning, which is what stops a sub
+    // generator adding subsonic mud (-7.8 dB at 20 Hz when tuned to 50).
+    // §40: BoomDecay sets the RING TIME, not the level — the onset moves only
+    // +5.0 to +7.4 dB across the whole control while the tail spans 22 dB at
+    // 150 ms. §34: it also makes even harmonics, so the generator is nonlinear.
+    float bq1[2] = {0,0}, bq2[2] = {0,0}, bhp[2] = {0,0};
+
+    inline void runBoom(float &l, float &r) {
+        if (p.boom <= 0.0f) return;
+        float *ch[2] = {&l, &r};
+        for (int c = 0; c < 2; c++) {
+            const float x = *ch[c];
+            bhp[c] += boom.hpA * (x - bhp[c]);
+            const float hp = x - bhp[c];                 // tracking high-pass
+            const float hpIn = bq1[c] + boom.g * hp;
+            const float bp = hpIn / (1.0f + boom.g * (boom.g + boom.k));
+            bq1[c] = 2.0f * bp - bq1[c];
+            const float lo = bq2[c] + boom.g * bp;
+            bq2[c] = 2.0f * lo - bq2[c];
+            // nonlinear: §34 measured elevated H2 with Boom up
+            const float sub = std::tanh(bp * 1.6f) * 0.625f;
+            *ch[c] = x + boom.amount * 2.2f * sub;
+        }
+    }
+
+    void applyAll() {
+        apply();
+        drive.select(p.driveType);
+        drive.setDrive(p.drive);
+        crunchShaper.selectCrunch();
+        crunchShaper.setDrive(p.crunch);
+        trans.set(p.trans);
+    }
+
+    // Block processing. Order is the MEASURED one; see the header.
+    void process(float *io, int n) {
+        const float outG = p.outGain;
+        if (neutral()) {                       // §14: a true bypass, not "quiet"
+            if (outG != 1.0f)
+                for (int i = 0; i < 2 * n; i++) io[i] *= outG;
+            return;
+        }
+        const float mix = p.dryWet;
+        for (int i = 0; i < n; i++) {
+            const float dl = io[2*i], dr = io[2*i+1];
+            float l = dl * p.trim, r = dr * p.trim;      // §13 Trim is PRE
+            trans.run(l, r);                             // §34 upstream of sat
+            if (p.comp) comp.run(l, r);                  // §23 upstream of dist
+            l = drive.run(l); r = drive.run(r);
+            if (p.crunch > 0.0f) { l = crunchShaper.run(l); r = crunchShaper.run(r); }
+            damp.run(l, r);                              // §24 after Crunch
+            runBoom(l, r);
+            l = dl + (l - dl) * mix;                     // Dry/Wet across the stage
+            r = dr + (r - dr) * mix;
+            io[2*i]   = l * outG;                        // §13 Output is POST
+            io[2*i+1] = r * outG;
+        }
     }
 
     // §14: DryWet 0 is a TRUE bypass, measured — slope 0.999, ceiling 0.996,

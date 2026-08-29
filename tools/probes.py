@@ -295,14 +295,60 @@ SUITE2_ORDER = ['align2', 'steps2k', 'sw100', 'sw300', 'sw1k', 'sw3k', 'hits']
 # measurements.md §32), so everything whose SHAPE we still need is measured on a
 # 100 Hz amplitude sweep. Long, because bin density at the extremes is what
 # limits curve precision. Plus hits for Boom's decay, which is temporal.
+def valid(seconds=6.0, peak=0.30):
+    """VALIDATION material — deliberately unlike anything used for fitting.
+
+    `hits` was used to fit the Transients law and Boom's decay, so it is NOT
+    held out and must not score the model. This is a different pattern at a
+    different tempo, with noise-based snare and hat content alongside the tonal
+    kick, so it exercises the band-limited stages (Crunch, Damp) and the
+    dynamics on material the fits never saw."""
+    n = int(seconds * SR)
+    out = [0.0] * n
+    rng = 12345
+    def rand():
+        nonlocal rng
+        rng = (1103515245 * rng + 12345) & 0x7fffffff
+        return rng / 0x3fffffff - 1.0
+    beat = int(SR * 60.0 / 96.0 / 4)          # 96 BPM, sixteenths
+    pat = [('k', 1.0), ('h', .4), ('h', .3), ('s', .0),
+           ('h', .35), ('h', .3), ('k', .8), ('h', .3),
+           ('s', 1.0), ('h', .4), ('h', .3), ('k', .5),
+           ('h', .35), ('s', .5), ('h', .3), ('h', .45)]
+    for step in range(0, n // beat):
+        kind, amp = pat[step % len(pat)]
+        if amp <= 0.0:
+            continue
+        s0 = step * beat
+        for i in range(min(beat * 3, n - s0)):
+            t = i / SR
+            if kind == 'k':
+                v = math.exp(-t / 0.16) * math.sin(2*math.pi*(58.0 + 40.0*math.exp(-t/0.02))*t)
+            elif kind == 's':
+                v = math.exp(-t / 0.09) * (0.6*rand() + 0.5*math.sin(2*math.pi*190.0*t))
+            else:
+                v = math.exp(-t / 0.025) * rand()
+            out[s0 + i] += peak * amp * v
+    m = max(abs(v) for v in out) or 1.0
+    return [v / m * 0.85 for v in out], [v / m * 0.85 for v in out]
+
+
 PROBES3 = {
     'align2': (align_chirp, 'broadband chirp: lag and polarity, unambiguous'),
+    'valid':  (valid, 'VALIDATION material — never used for any fit'),
     'sw100L': (lambda: swept_at(100.0)(seconds=16.0),
                '100 Hz amplitude sweep, 16 s — the curve probe. Long because bin '
                'density at the extremes is what limits curve precision.'),
     'hits':   (hits, 'Boom decay and transient behaviour'),
 }
 SUITE3_ORDER = ['align2', 'sw100L', 'hits']
+
+# suite4: scoring only. The alignment chirp, then material that has never been
+# fit to. `hits` is deliberately absent — it was used for the Transients law and
+# Boom's decay, so it is not held out.
+PROBES4 = {'align2': (align_chirp, 'alignment'),
+           'valid':  (valid, 'VALIDATION material — never used for any fit')}
+SUITE4_ORDER = ['align2', 'valid']
 
 
 SUITE_ORDER = ['align', 'swept', 'twotone', 'sweep', 'bursts', 'steps', 'hits', 'ramp']
@@ -357,6 +403,12 @@ def main():
             'peak': round(max(abs(v) for v in l), 6), 'purpose': why,
         }
         print(f'{name:10s} {len(l)/SR:6.2f}s  peak {max(abs(v) for v in l):.3f}  {h[:16]}…  {why}')
+    p4, h4, off4, tot4 = build_named_suite(outdir, SUITE4_ORDER, PROBES4, 'suite4.wav')
+    manifest['suite4'] = {'file': 'suite4.wav', 'sha256': h4, 'frames': tot4,
+                          'seconds': round(tot4 / SR, 3), 'gap_seconds': GAP,
+                          'align_segment': 'align2', 'offsets': off4}
+    print(f'\nsuite4.wav {tot4/SR:6.2f}s  {h4[:16]}…  (VALIDATION, never fit to)')
+
     p3, h3, off3, tot3 = build_named_suite(outdir, SUITE3_ORDER, PROBES3, 'suite3.wav')
     manifest['suite3'] = {'file': 'suite3.wav', 'sha256': h3, 'frames': tot3,
                           'seconds': round(tot3 / SR, 3), 'gap_seconds': GAP,
