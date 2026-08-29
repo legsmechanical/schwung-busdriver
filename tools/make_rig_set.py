@@ -453,8 +453,9 @@ def main():
     if os.path.exists(pm):
         with open(pm) as f:
             pmj = json.load(f)
-        if pmj.get('suite', {}).get('file') == os.path.basename(a.probe):
-            manifest['suite'] = pmj['suite']
+        for key in ('suite', 'suite2'):
+            if pmj.get(key, {}).get('file') == os.path.basename(a.probe):
+                manifest['suite'] = pmj[key]
 
     next_id, nfixed = fix_id_counters(root)
 

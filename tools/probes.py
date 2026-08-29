@@ -226,7 +226,86 @@ def align_tone(seconds=1.0, hz=300.0, db_level=ALIGN_DB):
     return s, s
 
 
+def align_chirp(seconds=0.5, f0=200.0, f1=8000.0, db_level=-30.0):
+    """Short BROADBAND chirp — the v2 alignment segment.
+
+    v1 used a −30 dBFS 300 Hz tone. Quiet was right (every cell stays
+    quasi-linear there), single-frequency was not: a tone cannot distinguish a
+    polarity flip from a half-period shift, so its candidate lags came out 73.5
+    samples apart with alternating sign and the first curve extraction was
+    silently inverted. A chirp has no period to alias against, so lag AND
+    polarity fall out of one correlation."""
+    n = int(seconds * SR)
+    a = 10 ** (db_level / 20.0)
+    L = seconds / math.log(f1 / f0)
+    K = seconds * 2 * math.pi * f0 / math.log(f1 / f0)
+    s = []
+    for i in range(n):
+        t = i / SR
+        env = 1.0
+        f = int(0.005 * SR)
+        if i < f: env = i / f
+        if i > n - f: env = (n - i) / f
+        s.append(a * env * math.sin(K * (math.exp(t / L) - 1.0)))
+    return s, s
+
+
+def steps2k(**kw):
+    """Level steps on a 2 kHz carrier — 0.5 ms per cycle.
+
+    v1's steps probe used 200 Hz = 5.0 ms per cycle, which is a hard floor on any
+    envelope-derived time constant, and the compressor's attack is below it. Ten
+    times the resolution here."""
+    return steps(hz=2000.0, **kw)
+
+
+def swept_at(carrier):
+    """Amplitude-swept sine at one carrier — a family of them separates the
+    SHAPER from the FILTERING around it.
+
+    At a single carrier, `soft` at high drive showed a large phase-dependent
+    spread (sd 0.217 at |x|=0.98 against `hard`'s 0.005), so a static curve is
+    insufficient there. Repeating the same amplitude sweep at several carriers
+    says whether the fold law itself is frequency dependent or whether only the
+    surrounding filtering is."""
+    def f(seconds=6.0, peak=1.0):
+        n = int(seconds * SR)
+        out = []
+        for i in range(n):
+            t = i / n
+            env = (2.0 * t) if t <= 0.5 else (2.0 * (1.0 - t))
+            out.append(peak * env * math.sin(2 * math.pi * carrier * i / SR))
+        return out, out
+    return f
+
+
+PROBES2 = {
+    'align2':   (align_chirp,        'broadband chirp: lag AND polarity, unambiguous'),
+    'steps2k':  (steps2k,            'compressor times, 2 kHz carrier (0.5 ms/cycle)'),
+    'sw100':    (swept_at(100.0),    'fold law @ 100 Hz'),
+    'sw300':    (swept_at(300.0),    'fold law @ 300 Hz (matches the v1 suite)'),
+    'sw1k':     (swept_at(1000.0),   'fold law @ 1 kHz'),
+    'sw3k':     (swept_at(3000.0),   'fold law @ 3 kHz'),
+    'hits':     (hits,               'transient stage + where it sits in the chain'),
+}
+SUITE2_ORDER = ['align2', 'steps2k', 'sw100', 'sw300', 'sw1k', 'sw3k', 'hits']
+
+
 SUITE_ORDER = ['align', 'swept', 'twotone', 'sweep', 'bursts', 'steps', 'hits', 'ramp']
+
+
+def build_named_suite(outdir, order, table, fname):
+    segs, offsets = [], {}
+    gap = [0.0] * int(GAP * SR)
+    for name in order:
+        fn = table[name][0] if name in table else PROBES[name][0]
+        l, _ = fn()
+        offsets[name] = {'start': len(segs), 'frames': len(l),
+                         'seconds': round(len(l) / SR, 4)}
+        segs.extend(l); segs.extend(gap)
+    path = os.path.join(outdir, fname)
+    h = write_wav(path, segs, segs)
+    return path, h, offsets, len(segs)
 
 
 def build_suite(outdir):
@@ -264,6 +343,14 @@ def main():
             'peak': round(max(abs(v) for v in l), 6), 'purpose': why,
         }
         print(f'{name:10s} {len(l)/SR:6.2f}s  peak {max(abs(v) for v in l):.3f}  {h[:16]}…  {why}')
+    p2, h2, off2, tot2 = build_named_suite(outdir, SUITE2_ORDER, PROBES2, 'suite2.wav')
+    manifest['suite2'] = {'file': 'suite2.wav', 'sha256': h2, 'frames': tot2,
+                          'seconds': round(tot2 / SR, 3), 'gap_seconds': GAP,
+                          'align_segment': 'align2', 'offsets': off2}
+    print(f'\nsuite2.wav {tot2/SR:6.2f}s  {h2[:16]}…  ({len(off2)} segments)')
+    for k, v in off2.items():
+        print(f'   {k:9s} @ {v["start"]/SR:6.2f}s  {v["seconds"]:5.2f}s')
+
     path, h, offsets, total = build_suite(outdir)
     manifest['suite'] = {'file': 'suite.wav', 'sha256': h, 'frames': total,
                          'seconds': round(total / SR, 3), 'gap_seconds': GAP,

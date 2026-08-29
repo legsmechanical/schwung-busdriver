@@ -75,6 +75,51 @@
       "purpose": "transient stage + validation"
     }
   },
+  "suite2": {
+    "file": "suite2.wav",
+    "sha256": "a483fe89652c83cfc6a54a462402a3463555c2696b08e6e47deeea880849872f",
+    "frames": 1808100,
+    "seconds": 41.0,
+    "gap_seconds": 0.5,
+    "align_segment": "align2",
+    "offsets": {
+      "align2": {
+        "start": 0,
+        "frames": 22050,
+        "seconds": 0.5
+      },
+      "steps2k": {
+        "start": 44100,
+        "frames": 396900,
+        "seconds": 9.0
+      },
+      "sw100": {
+        "start": 463050,
+        "frames": 264600,
+        "seconds": 6.0
+      },
+      "sw300": {
+        "start": 749700,
+        "frames": 264600,
+        "seconds": 6.0
+      },
+      "sw1k": {
+        "start": 1036350,
+        "frames": 264600,
+        "seconds": 6.0
+      },
+      "sw3k": {
+        "start": 1323000,
+        "frames": 264600,
+        "seconds": 6.0
+      },
+      "hits": {
+        "start": 1609650,
+        "frames": 176400,
+        "seconds": 4.0
+      }
+    }
+  },
   "suite": {
     "file": "suite.wav",
     "sha256": "6f6fb44cd168fc4bd4484b1c148b7e92b403816ac4ae9c850ab4095dc5d97b2c",
