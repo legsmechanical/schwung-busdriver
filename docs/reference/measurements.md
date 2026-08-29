@@ -464,3 +464,39 @@ curve is an excellent model for `hard`, and an insufficient one for `soft` at hi
   tones); needs a topology cell measured on `hits`.
 - **The soft folder's exact fold law** — the curve above is the start, but the phase spread means
   it needs a probe at more than one carrier frequency.
+
+---
+
+# 29. The `soft` fold law (2026-08-28, single-carrier)
+
+The swept probe's amplitude is a known function of time, so tracking the fundamental and third
+harmonic as amplitude rises expresses the fold the way a folder is actually parameterised.
+Levels in dB, relative to the loudest fundamental across the three cells:
+
+| input amp | soft 0.5 H1 / H3 | soft 0.75 H1 / H3 | soft 1.0 H1 / H3 |
+|---|---|---|---|
+| 0.25 | −3.3 / −35.1 | −2.5 / −32.3 | −1.7 / −29.0 |
+| 0.49 | −0.4 / −24.0 | −0.2 / −23.5 | **0.0** / −21.6 |
+| 0.62 | −0.1 / −22.5 | −0.3 / −24.3 | −0.2 / −24.1 |
+| 0.75 | −0.2 / −23.9 | −0.9 / −20.2 | −1.3 / −16.2 |
+| 0.85 | −0.5 / −23.7 | −2.2 / −12.9 | −3.6 / −8.9 |
+| 0.94 | −1.1 / −18.1 | −5.1 / −7.3 | −9.8 / −4.1 |
+| 1.00 | −1.9 / −13.6 | −9.9 / −4.4 | **−35.0** / **−2.4** |
+
+**The shape of the fold:** below onset, H1 rises normally and H3 grows steadily — ordinary soft
+saturation. Above onset **H1 collapses while H3 climbs**, and they cross. At Drive 1.0 and full
+input, H3 exceeds H1 by **32.6 dB**.
+
+**Fold onset moves down as Drive rises** — roughly amp 0.85 / 0.70 / 0.68 for Drive 0.5 / 0.75 /
+1.0. Multiplied by each cell's small-signal gain (×3.43 / ×3.98 / ×4.62) that is **2.92 / 2.79 /
+3.14** — constant within ±6%.
+
+⭑ **Working hypothesis: `Drive` is a pre-gain into a FIXED folding shaper, with makeup after it.**
+A second check agrees: the H3−H1 crossover that Drive 0.5 reaches at amp 1.00, Drive 1.0 reaches
+at amp ≈0.79, a ratio of 1.27 against the 1.346 predicted by their gain difference.
+
+⚠ **Not yet confirmed, and this is what the second export is for.** The check above uses the
+small-signal gain as a proxy for the pre-gain, which is only valid if all of Drive's effect is
+pre-gain — the thing being tested. `campaign2`'s `sw100/sw300/sw1k/sw3k` settle it: if the fold is
+a memoryless pre-gain into a fixed shaper, the law is **identical at every carrier**. If it moves
+with frequency, there is filtering inside the fold and the model is wrong.
