@@ -402,3 +402,65 @@ Per-hit onset (first 10 ms peak) and tail (100–220 ms RMS), vs neutral:
 two different behaviours depending on sign**. DR32 split this into orthogonal Attack and Sustain
 because "attack and tail moving together" was treated as a defect; in Drum Buss that coupling is
 real, but only on the positive side.
+
+---
+
+# The Drive types (2026-08-28) — `tools/curves.py`
+
+## 26. 🔴 CONFIRMED: **`soft` is a WAVEFOLDER, not a saturator**
+
+Output spectrum at the envelope peak, input a 300 Hz sine, dB relative to the strongest bin:
+
+| cell | 300 | 600 | 900 | 1200 | 1500 |
+|---|---|---|---|---|---|
+| neutral | **0.0** | −106.6 | −19.2 | −121.0 | −37.0 |
+| soft 0.5 | **0.0** | −101.9 | −10.9 | −95.1 | −15.4 |
+| soft 0.75 | −5.9 | −95.9 | **0.0** | −98.4 | −16.4 |
+| soft 1.0 | **−25.6** | −114.8 | **0.0** | −113.3 | −33.1 |
+| med 1.0 | **0.0** | −52.4 | −36.2 | −68.0 | −26.2 |
+| hard 1.0 | **0.0** | −83.3 | −27.1 | −98.8 | −26.6 |
+
+At `soft` 1.0 the **third harmonic exceeds the fundamental by 25.6 dB**. The fundamental is not
+merely compressed, it is *consumed* — the signature of folding, not of saturation. It comes on
+progressively: at 0.5 the fundamental still dominates, at 0.75 H3 has overtaken it, at 1.0 it is
+gone. One carrier cycle of the waveform shows the output completing ~3 cycles per input cycle and
+reversing sign while the input is still rising.
+
+`med` and `hard` stay fundamental-dominated and are ordinary saturation/clipping. This matches the
+tutorial's "soft = mild wave shaping / medium = limiting / hard = clipping" — the measurement says
+the wave shaping is literal.
+
+⚠ **Refines §22.** All three are odd-dominated, but not equally: at full drive H2 is **−52.4 dB
+for `med`** against −83.3 (`hard`) and −114.8 (`soft`). So **`med` carries a slight asymmetry**;
+`soft` and `hard` are essentially perfectly odd.
+
+## 27. Transfer curves, and where a static curve stops working
+
+Output at each positive input level (the device at that setting, not an isolated stage — it
+saturates even at Drive 0 and subtracting neutral is not valid for a nonlinearity):
+
+| cell | 0.05 | 0.10 | 0.20 | 0.35 | 0.50 | 0.70 | 0.85 | 1.00 |
+|---|---|---|---|---|---|---|---|---|
+| neutral = soft 0.0 | 0.065 | 0.140 | 0.294 | 0.479 | 0.644 | 0.808 | 0.890 | 0.943 |
+| hard 0.0 | 0.089 | 0.185 | 0.378 | 0.588 | 0.750 | 0.883 | 0.936 | 0.967 |
+| hard 1.0 | 0.242 | 0.419 | 0.644 | 0.765 | 0.849 | 0.914 | 0.953 | **0.985** |
+| med 1.0 | 0.280 | 0.455 | 0.616 | 0.701 | 0.782 | 0.847 | 0.892 | 0.941 |
+| soft 1.0 | 0.214 | 0.364 | 0.537 | 0.689 | 0.692 | 0.610 | 0.495 | **0.291** |
+
+`soft` 1.0's curve **turns over** — that is the fold, not an artefact.
+
+**Rising and falling halves of the amplitude sweep are IDENTICAL** (0.5910 vs 0.5906 at |x|=0.2),
+so the drive stage has **no envelope-dependent memory** — no dynamics to model.
+
+But per-bin spread is **phase**-dependent and very unequal: at |x|=0.98, `hard` gives sd **0.005**
+(a clean static clipper, directly modellable from this curve) while `soft` gives sd **0.217**. A
+hard clipper flattens phase differences; a soft shaper maps them straight through. So a static
+curve is an excellent model for `hard`, and an insufficient one for `soft` at high drive.
+
+## 28. Revised open list
+
+- **Compressor attack/release** — still needs the 2 kHz-carrier `steps` probe (§18).
+- **Where Transients sits in the chain** — the sweep cannot place it (the stage is inert on steady
+  tones); needs a topology cell measured on `hits`.
+- **The soft folder's exact fold law** — the curve above is the start, but the phase spread means
+  it needs a probe at more than one carrier frequency.
