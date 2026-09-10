@@ -3,10 +3,6 @@
 A model of Ableton Live 12's **Drum Buss**, for [Schwung](https://github.com/charlesvestal/schwung)
 on Ableton Move. Built from measurement of the device rather than from its documentation.
 
-> ⚠️ **Work in progress.** Validated against Live's 22 stock Drum Buss presets on audio never used
-> to build it: level within about 1 dB, spectral match around 5–6 dB in third octaves. That is
-> close, not exact — **a model, not a clone**. Not yet ear-checked on hardware.
-
 ## Using it
 
 Add **Bus Driver** as an Audio FX in a Signal Chain (or Master FX) and open its editor. It has two
@@ -46,18 +42,6 @@ Trim → Transients → Compress → Drive → Crunch → Damp → Boom → Dry/
 Measured, not taken from the documentation. Two placements rest on an argument that a gain
 downstream of a nonlinearity cannot change the harmonic-to-linear **ratio**: toggling Compress
 moves that ratio, and so does Transients, so both must sit upstream of the distortion.
-
-## How it was built
-
-Ableton's device only runs inside Live, so Live rendered every measurement. `.als` files are
-gzipped XML, so `tools/` generates a Set with one track per parameter cell, each carrying a probe
-suite, and a single offline export produces the whole ladder. Four exports, 138 cells.
-
-The method and every number are in
-[`docs/reference/measurements.md`](docs/reference/measurements.md) and
-[`docs/specs/`](docs/specs/) — including the things that went wrong, which is most of the useful
-part: a retracted polarity finding, a resampler hiding in the render path, and a curve fit that
-improved its own metric while making the model worse.
 
 ## Install
 
