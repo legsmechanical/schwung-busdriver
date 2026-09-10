@@ -13,18 +13,54 @@
     "component_type": "audio_fx",
     "audio_in": true,
     "chain_params": [
-      { "key": "drive",      "name": "Drive",      "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
-      { "key": "drive_type", "name": "Character",  "type": "enum",  "options": ["Soft", "Medium", "Hard"], "default": "Soft" },
-      { "key": "crunch",     "name": "Crunch",     "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
-      { "key": "damp",       "name": "Damp",       "type": "float", "min": 500.0,  "max": 20000.0, "step": 100.0, "default": 20000.0, "unit": "Hz" },
-      { "key": "transients", "name": "Transients", "type": "float", "min": -1.0,   "max": 1.0,     "step": 0.02, "default": 0.0 },
-      { "key": "comp",       "name": "Compress",   "type": "float", "min": 0.0,    "max": 1.0,     "step": 1.0,  "default": 0.0 },
-      { "key": "boom",       "name": "Boom",       "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
-      { "key": "boom_freq",  "name": "Boom Freq",  "type": "float", "min": 30.0,   "max": 90.0,    "step": 0.5,  "default": 50.0, "unit": "Hz" },
-      { "key": "boom_decay", "name": "Boom Decay", "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 },
-      { "key": "trim",       "name": "Trim",       "type": "float", "min": -70.0,  "max": 0.0,     "step": 0.5,  "default": 0.0, "unit": "dB" },
-      { "key": "drywet",     "name": "Dry/Wet",    "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 },
-      { "key": "output",     "name": "Output",     "type": "float", "min": -40.0,  "max": 3.0,     "step": 0.5,  "default": 0.0, "unit": "dB" }
-    ]
+      { "key": "drive",      "name": "Drive",  "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "drive_type", "name": "Char",   "type": "enum",  "options": ["Soft", "Medium", "Hard"], "default": "Soft" },
+      { "key": "crunch",     "name": "Crunch", "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "damp",       "name": "Damp",   "type": "float", "min": 500.0,  "max": 20000.0, "step": 100.0, "default": 20000.0, "unit": "Hz" },
+      { "key": "transients", "name": "Trans",  "type": "float", "min": -1.0,   "max": 1.0,     "step": 0.02, "default": 0.0 },
+      { "key": "boom",       "name": "Boom",   "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+      { "key": "boom_freq",  "name": "B Freq", "type": "float", "min": 30.0,   "max": 90.0,    "step": 0.5,  "default": 50.0, "unit": "Hz" },
+      { "key": "boom_decay", "name": "Decay",  "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 },
+      { "key": "comp",       "name": "Comp",   "type": "enum",  "options": ["Off", "On"], "default": "Off", "viz": {"kind": "switch"} },
+      { "key": "trim",       "name": "Trim",   "type": "float", "min": -70.0,  "max": 0.0,     "step": 0.5,  "default": 0.0, "unit": "dB", "viz": {"kind": "fader"} },
+      { "key": "output",     "name": "Out",    "type": "float", "min": -40.0,  "max": 3.0,     "step": 0.5,  "default": 0.0, "unit": "dB", "viz": {"kind": "fader"} },
+      { "key": "drywet",     "name": "Mix",    "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0, "viz": {"kind": "fader"} }
+    ],
+    "ui_hierarchy": {
+      "levels": {
+        "root": {
+          "name": "Bus Driver",
+          "params": [
+            { "level": "shape", "label": "Shape" },
+            { "level": "mix",   "label": "Mix" }
+          ],
+          "knobs": []
+        },
+        "shape": {
+          "name": "Shape",
+          "params": [
+            { "key": "drive",      "name": "Drive",  "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+            { "key": "drive_type", "name": "Char",   "type": "enum",  "options": ["Soft", "Medium", "Hard"], "default": "Soft" },
+            { "key": "crunch",     "name": "Crunch", "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+            { "key": "damp",       "name": "Damp",   "type": "float", "min": 500.0,  "max": 20000.0, "step": 100.0, "default": 20000.0, "unit": "Hz" },
+            { "key": "transients", "name": "Trans",  "type": "float", "min": -1.0,   "max": 1.0,     "step": 0.02, "default": 0.0 },
+            { "key": "boom",       "name": "Boom",   "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 0.0 },
+            { "key": "boom_freq",  "name": "B Freq", "type": "float", "min": 30.0,   "max": 90.0,    "step": 0.5,  "default": 50.0, "unit": "Hz" },
+            { "key": "boom_decay", "name": "Decay",  "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0 }
+          ],
+          "knobs": ["drive", "drive_type", "crunch", "damp", "transients", "boom", "boom_freq", "boom_decay"]
+        },
+        "mix": {
+          "name": "Mix",
+          "params": [
+            { "key": "comp",       "name": "Comp",   "type": "enum",  "options": ["Off", "On"], "default": "Off", "viz": {"kind": "switch"} },
+            { "key": "trim",       "name": "Trim",   "type": "float", "min": -70.0,  "max": 0.0,     "step": 0.5,  "default": 0.0, "unit": "dB", "viz": {"kind": "fader"} },
+            { "key": "output",     "name": "Out",    "type": "float", "min": -40.0,  "max": 3.0,     "step": 0.5,  "default": 0.0, "unit": "dB", "viz": {"kind": "fader"} },
+            { "key": "drywet",     "name": "Mix",    "type": "float", "min": 0.0,    "max": 1.0,     "step": 0.01, "default": 1.0, "viz": {"kind": "fader"} }
+          ],
+          "knobs": ["comp", "trim", "output", "drywet"]
+        }
+      }
+    }
   }
 }
