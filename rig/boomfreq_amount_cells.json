@@ -1,0 +1,287 @@
+[
+  {
+    "label": "dry",
+    "device_on": false,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 0.0,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq30_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 30.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq30_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 30.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq50_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq50_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq70_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 70.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq70_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 70.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq90_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 90.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "freq90_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 90.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt0.3_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 0.3,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt0.3_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 0.3,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt0.6_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 0.6,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt0.6_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 0.6,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt1.0_decay0.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 0.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  },
+  {
+    "label": "amt1.0_decay1.00",
+    "device_on": true,
+    "params": {
+      "EnableCompression": false,
+      "DriveAmount": 0.0,
+      "DriveType": 0,
+      "CrunchAmount": 0.0,
+      "DampingFrequency": 20000.0,
+      "TransientShaping": 0.0,
+      "BoomAmount": 1.0,
+      "BoomFrequency": 50.0,
+      "BoomDecay": 1.0,
+      "BoomAudition": false,
+      "InputTrim": 1.0,
+      "OutputGain": 1.0,
+      "DryWet": 1.0
+    }
+  }
+]

@@ -405,22 +405,97 @@ struct Transients {
 // subsonic mud. §34: it also contributes EVEN harmonics, so the generator is
 // nonlinear rather than a plain filter.
 //
-// TODO(campaign3): the resonance Q and the decay law. BoomDecay moved steady
-// state only ~1 dB at 125 Hz, so it is temporal and needs the hits segment.
+// CAMPAIGN 2 (2026-09-10): BoomDecay tying its whole range to Q — the first
+// attempt in this file, twice — turned out to be the wrong mechanism, not
+// just wrongly tuned. Measured directly, with a clean isolated impulse: a
+// resonator's OWN state decay can be damped shorter by extra per-sample
+// "leak," but it can never be made to ring LONGER than its Q already allows
+// — Q sets an upper bound, and no amount of tuning the decay side of the
+// equation can put ring back in once Q has damped it away. Confirmed against
+// a real Ableton reference render (Josh's `rig/sets/boomdecay*`, this
+// session) that BoomDecay does NOT interact with BoomFrequency or BoomAmount
+// (the decay=1 vs decay=0 spread is flat to ~1 dB across 30-90 Hz and across
+// 0.3-1.0 Amount) — so whatever the real mechanism is, it does not need a
+// frequency- or amount-dependent law, which simplifies this a lot.
+//
+// So: Q is now FIXED, high enough to physically sustain a real multi-hundred-
+// ms ring on its own (this is what campaign 1 got backwards — it kept Q low
+// "for safety" and tried to get ring time from elsewhere, which cannot work).
+// BoomDecay instead drives a SEPARATE per-hit amplitude envelope — fast
+// attack (latches onto a transient immediately), decay/release time
+// geometric in BoomDecay — that multiplies the resonator's output. It can
+// only ever SHORTEN what Q's fixed, long natural ring already provides:
+// short release at BoomDecay=0 cuts it down to a tight thump; long release
+// at BoomDecay=1 gets out of the way and lets the full natural ring through.
+// That is the correct direction for a decay control, and it is why campaign
+// 1's mechanism — no matter how it was tuned — could only ever produce a
+// SHORTER, never a LONGER, effective ring than a low, safe Q already gives.
+//
+// Retrigger logic: `trig` is a fast (~1 ms) envelope follower on the same
+// tracking-highpassed excitation that drives the resonator. Whenever a new
+// hit's `trig` exceeds the currently-decaying `env`, `env` snaps UP to it
+// (a louder new hit always wins); otherwise `env` decays at the release rate.
+// Standard peak-hold-with-release, the same shape a real analog boom/808 sub
+// trigger uses.
+//
+// 🔴 FOUND WHILE CALIBRATING THE ABOVE: Q was NEVER FUNCTIONAL. The bandpass
+// recursion computed here (`bp = (bq1 + g*hp) / (1 + g*(g+k))`) never feeds
+// the lowpass integrator's own state back into the numerator — a real
+// resonant filter needs that feedback (subtracting the accumulated lowpass
+// energy from the excitation) to actually resonate; without it, `k` (1/Q)
+// only nudges a denominator that is ~1.0006 at Q=6 and ~1.0018 at Q=2, at
+// 50 Hz/44100 Hz — a <0.2% difference across a 40x range of Q, checked by
+// hand. That is why every attempt in this file to control ring time via Q
+// measured as nearly inert regardless of how it was tuned, all the way back
+// to the very first "1.2 + 2*decay" law: Q was cosmetic the whole time, not
+// merely mistuned. This was inherited from `dr32`'s original implementation,
+// so it likely predates this module.
+//
+// Replaced with the textbook topology-preserving-transform SVF (Zavalishin /
+// "Andy Simper" form) — TWO integrator states (`ic1`, `ic2`) where `ic2` is
+// subtracted from the excitation before the bandpass is computed, which is
+// the feedback path a resonator actually needs:
+//   v3 = in - ic2;  v1 = a1*ic1 + a2*v3;  v2 = ic2 + a2*ic1 + a3*v3;
+//   bp = v1;  ic1 = 2*v1 - ic1;  ic2 = 2*v2 - ic2;
+// Verified by direct measurement (an isolated impulse, `_boom_q` swept) that
+// this ACTUALLY changes ring time with Q, unlike the formula it replaces.
+//
+// FITTED — for real this time — against a fresh Ableton reference render
+// Josh made this session (`rig/sets/boomdecay Project/boomdecay.als`, a
+// purpose-built punchy probe, `rig/probes/punch.wav`, chosen because it
+// isolates Boom's own ring from the excitation far better than the shared
+// `hits.wav`; `measurements.md` §40's table did not reproduce on the real
+// device with our own probes and is NOT used here). `tools/fit_boom_decay.py`
+// still targets the abandoned §40 numbers — see its own docstring — but its
+// render/checkpoint machinery is what this fit reused; only the target table
+// and the fitted parameters (Q, relMsLo, relMsHi, not qLo/qHi/tauLoMs/tauHiMs
+// — that whole mechanism is gone, replaced by the real feedback fix above)
+// changed. Result: rms error **4.97 dB** against the real device, was ~39-44
+// dB before the feedback fix (Q literally could not do anything before this).
+// Checked for stability: rendered a full repeated-hit probe (`hits.wav`,
+// hits every 250 ms — comparable to Q's own ~370 ms ring at these settings)
+// and the level settles into a periodic pattern, not runaway growth.
 struct Boom {
-    float bpZ1 = 0.0f, bpZ2 = 0.0f, hpZ = 0.0f;
-    float g = 0.0f, k = 0.0f, hpA = 0.0f, amount = 0.0f;
+    float g = 0.0f, k = 0.0f, a1 = 0.0f, a2 = 0.0f, a3 = 0.0f, hpA = 0.0f, amount = 0.0f;
+    float Q = 33.73f;                            // fixed — see note above
+    float aTrig = 0.0f, relCoef = 1.0f;
+    float relMsLo = 45.63f, relMsHi = 1774.0f;   // fitted; see note above
 
     void set(float hz, float amt, float decay, float sr) {
         amount = amt;
         const float wc = 2.0f * 3.14159265f * hz / sr;
         g = std::tan(0.5f * wc);
-        // TODO(campaign3): Q from the measured peak width; decay from hits.
-        const float Q = 1.2f + 2.0f * decay;
         k = 1.0f / Q;
+        a1 = 1.0f / (1.0f + g * (g + k));
+        a2 = g * a1;
+        a3 = g * a2;
         hpA = 1.0f - std::exp(-wc);          // the tracking high-pass, §20
+        aTrig = 1.0f - std::exp(-1.0f / (0.001f * sr));   // ~1 ms, latches onto a hit fast
+        const float d01 = decay < 0.0f ? 0.0f : (decay > 1.0f ? 1.0f : decay);
+        const float relMs = relMsLo * std::pow(relMsHi / relMsLo, d01);
+        relCoef = std::exp(-1.0f / (relMs * 1e-3f * sr));
     }
-    void reset() { bpZ1 = bpZ2 = hpZ = 0.0f; }
+    void reset() {}
 };
 
 // ---------------------------------------------------------------- the device
@@ -441,7 +516,8 @@ struct DrumBuss {
     void reset() {
         comp.reset(); damp.reset(); boom.reset(); trans.reset(); emph.reset(); lim.reset();
         upL.reset(); upR.reset(); dnL.reset(); dnR.reset();
-        bq1[0]=bq1[1]=bq2[0]=bq2[1]=bhp[0]=bhp[1]=0.0f;
+        ic1[0]=ic1[1]=ic2[0]=ic2[1]=bhp[0]=bhp[1]=0.0f;
+        trig[0]=trig[1]=boomEnv[0]=boomEnv[1]=0.0f;
     }
 
     void apply() {
@@ -471,10 +547,15 @@ struct DrumBuss {
 
     // §20: Boom's high-pass TRACKS the tuning, which is what stops a sub
     // generator adding subsonic mud (-7.8 dB at 20 Hz when tuned to 50).
-    // §40: BoomDecay sets the RING TIME, not the level — the onset moves only
-    // +5.0 to +7.4 dB across the whole control while the tail spans 22 dB at
-    // 150 ms. §34: it also makes even harmonics, so the generator is nonlinear.
-    float bq1[2] = {0,0}, bq2[2] = {0,0}, bhp[2] = {0,0};
+    // §34: it also makes even harmonics, so the generator is nonlinear.
+    // `ic1`/`ic2` are the resonator's own two integrator states (the TPT SVF
+    // this now is — see the note at Boom's definition for why the old
+    // `bq1`/`bq2` recursion never actually resonated), run at Boom's FIXED Q
+    // with no extra damping — a correctly-implemented TPT filter is already
+    // unconditionally stable at any Q, so it needs none. `trig`/`boomEnv` are
+    // the separate per-hit amplitude envelope BoomDecay actually controls.
+    float ic1[2] = {0,0}, ic2[2] = {0,0}, bhp[2] = {0,0};
+    float trig[2] = {0,0}, boomEnv[2] = {0,0};
 
     inline void runBoom(float &l, float &r) {
         if (p.boom <= 0.0f) return;
@@ -483,14 +564,28 @@ struct DrumBuss {
             const float x = *ch[c];
             bhp[c] += boom.hpA * (x - bhp[c]);
             const float hp = x - bhp[c];                 // tracking high-pass
-            const float hpIn = bq1[c] + boom.g * hp;
-            const float bp = hpIn / (1.0f + boom.g * (boom.g + boom.k));
-            bq1[c] = 2.0f * bp - bq1[c];
-            const float lo = bq2[c] + boom.g * bp;
-            bq2[c] = 2.0f * lo - bq2[c];
+
+            // Per-hit amplitude envelope: a fast follower on the same signal
+            // that excites the resonator, latching boomEnv UP to any louder
+            // new hit and otherwise releasing at BoomDecay's rate. This can
+            // only ever shorten the resonator's own natural ring, never
+            // lengthen it — see Boom's definition for why that is the point.
+            trig[c] += boom.aTrig * (std::fabs(hp) - trig[c]);
+            if (trig[c] > boomEnv[c]) boomEnv[c] = trig[c];
+            else boomEnv[c] *= boom.relCoef;
+
+            // TPT SVF, bandpass output — v3 subtracts the LOWPASS integrator
+            // (ic2) from the excitation, which is the resonant feedback path
+            // the old formula was missing.
+            const float v3 = hp - ic2[c];
+            const float v1 = boom.a1 * ic1[c] + boom.a2 * v3;
+            const float v2 = ic2[c] + boom.a2 * ic1[c] + boom.a3 * v3;
+            const float bp = v1;
+            ic1[c] = 2.0f * v1 - ic1[c];
+            ic2[c] = 2.0f * v2 - ic2[c];
             // nonlinear: §34 measured elevated H2 with Boom up
             const float sub = std::tanh(bp * 1.6f) * 0.625f;
-            *ch[c] = x + boom.amount * 2.2f * sub;
+            *ch[c] = x + boom.amount * 2.2f * sub * boomEnv[c];
         }
     }
 

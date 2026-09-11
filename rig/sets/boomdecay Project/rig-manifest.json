@@ -1,0 +1,149 @@
+{
+  "generated": "tools/make_rig_set.py",
+  "probe": {
+    "file": "boomdecay_combo.wav",
+    "sha256": "6ba7e2620c36907a4141399db76c6cf7553b8fd01c8d1789bf453aa447b29733",
+    "frames": 352800,
+    "sample_rate": 44100,
+    "channels": 2,
+    "bits": 32
+  },
+  "base_set": "Source set Project/Source set.als",
+  "clip_template_from": "/Applications/Ableton Live 12 Suite.app/Contents/App-Resources/Core Library/Lessons/Sets/Driver Error Compensation.als",
+  "swept_param": "BoomDecay",
+  "fixed": {
+    "BoomAmount": 1.0,
+    "BoomFrequency": 50.0
+  },
+  "tempo": 120.0,
+  "tracks": [
+    {
+      "index": 0,
+      "name": "00_dry",
+      "device_on": false,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 1.0,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    },
+    {
+      "index": 1,
+      "name": "01_BoomDecay_0",
+      "device_on": true,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 0.0,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    },
+    {
+      "index": 2,
+      "name": "02_BoomDecay_0.25",
+      "device_on": true,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 0.25,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    },
+    {
+      "index": 3,
+      "name": "03_BoomDecay_0.5",
+      "device_on": true,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 0.5,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    },
+    {
+      "index": 4,
+      "name": "04_BoomDecay_0.75",
+      "device_on": true,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 0.75,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    },
+    {
+      "index": 5,
+      "name": "05_BoomDecay_1.0",
+      "device_on": true,
+      "params": {
+        "EnableCompression": false,
+        "DriveAmount": 0.0,
+        "DriveType": 0,
+        "CrunchAmount": 0.0,
+        "DampingFrequency": 20000.0,
+        "TransientShaping": 0.0,
+        "BoomAmount": 1.0,
+        "BoomFrequency": 50.0,
+        "BoomDecay": 1.0,
+        "BoomAudition": false,
+        "InputTrim": 1.0,
+        "OutputGain": 1.0,
+        "DryWet": 1.0
+      }
+    }
+  ],
+  "suite": null,
+  "export": {
+    "rendered_track": "All Individual Tracks",
+    "sample_rate": 44100,
+    "bit_depth": 32,
+    "dither": "off",
+    "normalize": "off"
+  }
+}
