@@ -2,7 +2,7 @@
   "id": "busdriver",
   "name": "Bus Driver",
   "abbrev": "DRVR",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "legsmechanical",
   "license": "MIT",
   "description": "Drum-bus glue modelled from measurement: one-knob compression, three drive characters, band-limited crunch, damping, and a tuned sub generator.",
